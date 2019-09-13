@@ -6,15 +6,13 @@ import time
 
 import utils
 
-class candidate():
+
+class Candidate():
     num_candidates = 0
     candidate_list = []
 
-    def __init__(self, x, y, img, list):
+    def __init__(self, x, y, list):
         self.valid = True
-        self.img = img
-        self.root_x = x
-        self.root_y = y
         self.x = x
         self.y = y
         self.x_min = x
@@ -22,127 +20,62 @@ class candidate():
         self.y_min = y
         self.y_max = y
         self.size = 1
-        self.num = candidate.num_candidates
-        candidate.num_candidates += 1
+        self.num = Candidate.num_candidates
+        Candidate.num_candidates += 1
         self.candidate_list = list
-
-    def explore(self):
-        self.check_self()
-
-    def check_self(self):
-        # ---- Checks the current pixel ---- #
-        if self.img[self.y, self.x] == -1:
-            self.draw_loc()  # for debugging
-            self.check_right()
-
-
-
-    def check_right(self):
-        # ---- Checks to the right of the current pixel ---- #
-        x_l = self.x
-        y_l = self.y
-        if self.check_valid(self.x + 1, self.y):  # if pixel is in image
-            if self.img[self.y, self.x + 1] == -1:  # if pixel is a new object
-                self.x_max = self.x + 1  # new rightmost pixel
-                self.x = self.x + 1  # move right
-                self.draw_loc()  # for debugging
-                self.size += 1  # increase size
-                self.check_right()
-            elif (self.img[self.y, self.x + 1] > 0) & (
-                    self.img[self.y, self.x + 1] != self.num):  # if pixel is in another object
-                self.candidate_list[self.img[self.y, self.x + 1]].valid = False  # set previous object to false
-                self.x_max = self.x + 1  # new rightmost pixel
-                self.x = self.x + 1  # move right
-                self.draw_loc()  # for debugging
-                self.size += 1  # increase size
-                self.check_right()
-        self.set_x_y(x_l, y_l)
-        self.check_up()
-        self.check_down()
-        self.check_left()
-
-    def check_down(self):
-        # ---- Checks below the current pixel ---- #
-        x_l = self.x
-        y_l = self.y
-        if self.check_valid(self.x, self.y + 1):  # if pixel is in image
-            if self.img[self.y + 1, self.x] == -1:  # if pixel is a new object
-                self.y_max = self.y + 1
-                self.y = self.y + 1
-                self.draw_loc()  # for debugging
-                self.size += 1
-                self.check_right()
-            elif (self.img[self.y + 1, self.x] > 0) & (
-                    self.img[self.y + 1, self.x] != self.num):  # if pixel is in another object
-                self.candidate_list[self.img[self.y + 1, self.x]].valid = False  # set previous object to false
-                self.y_max = self.y + 1  # new bottom pixel
-                self.y = self.y + 1
-                self.draw_loc()  # for debugging
-                self.size += 1
-                self.check_right()
-        # self.set_x_y(x_l, y_l)
-
-    def check_left(self):
-        x_l = self.x
-        y_l = self.y
-        if self.check_valid(self.x - 1, self.y):  # if pixel is in image
-            if self.img[self.y, self.x - 1] == -1:  # if pixel is a new object
-                self.x_min = self.x - 1
-                self.x = self.x - 1
-                self.draw_loc()  # for debugging
-                self.size += 1
-                self.check_right()
-            elif self.img[self.y, self.x - 1] > 0:  # if pixel belongs to another object
-                self.candidate_list[self.img[self.y, self.x - 1]].valid = False  # set previous object to false
-                self.x_min = self.x - 1
-                self.x = self.x - 1
-                self.draw_loc()  # for debugging
-                self.size += 1
-                self.check_right()
-        # self.set_x_y(x_l, y_l)
-
-    def check_up(self):
-        x_l = self.x
-        y_l = self.y
-        # ---- Used for propogating back up the branches of another object ---- #
-        if self.check_valid(self.x, self.y - 1):  # if pixel is in image
-            if self.img[self.y - 1, self.x] == -1:  # if pixel is a new object
-                self.y_min = self.y - 1
-                self.y = self.y - 1
-                self.draw_loc()  # for debugging
-                self.size += 1
-                self.check_right()
-            elif self.img[self.y - 1, self.x] > 0:  # if pixel belongs to another object
-                self.candidate_list[self.img[self.y - 1, self.x]].valid = False  # set previous object to false
-                self.y_min = self.y - 1
-                self.y = self.y - 1
-                self.draw_loc()  # for debugging
-                self.size += 1
-                self.check_right()
-        # self.set_x_y(x_l, y_l)
-
-    def return_to_root(self):
-        self.x = self.root_x
-        self.y = self.root_y
-
-    def set_x_y(self, x, y):
-        self.x = x
-        self.y = y
 
     def print_candidates(self):
         # ---- Prints all object candidates ---- #
         for c in self.candidate_list:
             print(c.num)
 
-    def draw_loc(self):
-        self.img[self.y, self.x] = self.num
+    def add(self, x, y):
+        if x > self.x_max:
+            self.x_max = x
+        if x < self.x_min:
+            self.x_min = x
+        if y > self.y_max:
+            self.y_max = y
+        if y < self.y_min:
+            self.y_min = y
 
-    def check_valid(self, x, y):
-        # ---- Ensures checked pixels are not outside bounds of image ---- #
-        if (x >= 0) & (y >= 0) & (x < self.img.shape[1]) & (y < self.img.shape[0]):
-            return True
-        else:
-            return False
+        self.size += 1;
+
+    def merge(self, old_candidate):
+        if old_candidate.valid:
+            old_candidate.valid = False
+            if old_candidate.x_max > self.x_max:
+                self.x_max = old_candidate.x_max
+            if old_candidate.x_min < self.x_min:
+                self.x_min = old_candidate.x_min
+            if old_candidate.y_max > self.y_max:
+                self.y_max = old_candidate.y_max
+            if old_candidate.y_min < self.y_min:
+                self.y_min = old_candidate.y_min
+
+            self.size += old_candidate.size
+
+
+def check_valid(x, y, xmax, ymax):
+    # ---- Ensures checked pixels are not outside bounds of image ---- #
+    if (x >= 0) & (y >= 0) & (x < xmax) & (y < ymax):
+        return True
+    else:
+        return False
+
+
+def check_left(x, y, img):
+    if check_valid(x - 1, y, img.shape[1], img.shape[0]):  # pixel is in image
+        return img[y, x - 1]
+    else:
+        return -1
+
+
+def check_up(x, y, img):
+    if check_valid(x, y - 1, img.shape[1], img.shape[0]):  # pixel is in image
+        return img[y - 1, x]
+    else:
+        return -1
 
 
 if __name__ == "__main__":
@@ -175,19 +108,35 @@ if __name__ == "__main__":
 
     # ---- Find objects ---- #
     candidates = []
+    start = time.process_time()
     row_l = 0
     col_l = 0
-    start = time.process_time()
     for row in range(A.shape[0]):
         for col in range(A.shape[1]):
             A[row_l, col_l] = C[row_l, col_l]
             A[row, col] = 1
             row_l = row
             col_l = col
-            if B[row, col] == -1:
-                c = candidate(col, row, B, candidates)  # create a new ball candidate where the object exists
-                candidates.append(c)
-                c.explore()
+
+            if B[row, col] == -1:  # found an object
+                left = check_left(col, row, B)
+                up = check_up(col, row, B)
+
+                if left < 0:  # no object left
+                    if up < 0:  # no object up (new object)
+                        c = Candidate(col, row, candidates)  # create a new ball candidate where the object exists
+                        candidates.append(c)
+                        B[row,col] = c.num
+                    else:  # existing object up
+                        candidates[up].add(col, row)
+                        B[row, col] = candidates[up].num
+                else:  # existing object left
+                    if up < 0:  # no object up
+                        candidates[left].add(col, row)
+                        B[row, col] = candidates[left].num
+                    else:  # two objects that both exist
+                        candidates[left].merge(candidates[up])
+                        B[row, col] = candidates[left].num
 
             # ---- Plotting ---- #
             plt.subplot(1, 2, 1)
@@ -197,14 +146,16 @@ if __name__ == "__main__":
             plt.axis('off')
             plt.imshow(B, cmap='gray', vmin=-1)
 
+            plt.pause(0.001)
+            plt.clf()
+
             # os.chdir(root)
             # os.chdir(save_dir)
             # plt.savefig(str(row*A.shape[1]+col).zfill(4)+'.png', format='png')
             # os.chdir(root)
             # os.chdir(img_dir)
 
-            plt.pause(0.001)
-            plt.clf()
+
     print(time.process_time() - start)
     # plt.subplot(2, 2, 2)
     # plt.imshow(C, cmap='gray', vmin=0, vmax=1)
