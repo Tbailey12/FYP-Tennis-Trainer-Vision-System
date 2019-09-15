@@ -1,6 +1,6 @@
 import os
 
-folder = "binary_image_search"
+folder = "binary_image_search4"
 
 root = os.getcwd()
 os.chdir(folder)
