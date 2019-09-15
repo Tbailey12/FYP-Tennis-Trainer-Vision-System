@@ -11,12 +11,15 @@ import utils
 
 
 class Candidate():
-    def __init__(self, label, x, y, size):
-        self.valid = True
-        self.x = x
-        self.y = y
+    def __init__(self, label):
         self.label = label
-        self.size = size
+        self.size = None
+        self.x = None
+        self.y = None
+        self.xmin = None
+        self.xmax = None
+        self.ymin = None
+        self.ymax = None
 
 
 if __name__ == "__main__":
@@ -58,41 +61,44 @@ if __name__ == "__main__":
     labels, n_features = ndimage.label(A)  # label image
     label_sizes = ndimage.sum(A, labels, index=range(n_features + 1))
 
-
-    '''
-    need to work out how to:
-        mask labels based on size
-        find centers of remaining labels
-        find bounding box of remaining labels (to determine skew)
-    '''
-    start = time.time_ns()
     # # mask all objects under a certain size
     mask = np.bitwise_and(min_size < label_sizes, label_sizes < max_size)
     labels_masked = mask[labels.ravel()].reshape(labels.shape)
     labels[~labels_masked] = 0
-
     candidates = []
 
-    for i, l_size in enumerate(label_sizes):
-        if min_size < l_size < max_size:
-            centers = [int(s) for s in ndimage.center_of_mass(labels_masked, labels, i)]  # find centre of mass of object
-            c = Candidate(i, centers[1], centers[0], l_size)
-            candidates.append(c)
-
-    print((time.time_ns() - start) / 1E9)
-
+    # filtered_labels = [c.label for c in candidates]
     objects = ndimage.find_objects(labels)
-    filtered_labels = [c.label for c in candidates]
-    for label in filtered_labels:
-        print(objects[0])
-        # print(objects[label][0].start)
-
-
-    print(n_features)
+    for i, obj in enumerate(objects):
+        if obj is not None:
+            label = i + 1
+            c = Candidate(label)
+            c.size = label_sizes[label]
+            center = [int(s) for s in ndimage.center_of_mass(labels, labels, label)]
+            c.x = center[1]
+            c.y = center[0]
+            c.xmin = obj[1].start - 1
+            if c.xmin < 0:  c.xmin = 0
+            c.xmax = obj[1].stop
+            c.ymin = obj[0].start - 1
+            if c.ymin < 0:  c.ymin = 0
+            c.ymax = obj[0].stop
+            # discard if proportions are outside bounds
+            width = c.xmax-c.xmin
+            height = c.ymax-c.ymin
+            if(width/height > max_ratio)|(height/width < 1/max_ratio):
+                continue
+            candidates.append(c)
 
     # ---- Plotting ---- #
     plt.imshow(labels, cmap='gray')
     for c in candidates:
-        plt.scatter(c.x,c.y,linewidths=5,color='r',marker='x')
+        # plt.scatter(c.x,c.y,linewidths=5,color='r',marker='x')
+        plt.plot((c.xmin, c.xmin), (c.ymin, c.ymax), color='r', linewidth='1')
+        plt.plot((c.xmin, c.xmax), (c.ymax, c.ymax), color='r', linewidth='1')
+        plt.plot((c.xmax, c.xmax), (c.ymax, c.ymin), color='r', linewidth='1')
+        plt.plot((c.xmax, c.xmin), (c.ymin, c.ymin), color='r', linewidth='1')
+
     plt.axis('off')
+
     plt.show()
