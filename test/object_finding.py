@@ -28,6 +28,7 @@ if __name__ == "__main__":
     root = utils.get_project_root()
 
     img_dir = "img\\output\\background_subtraction_full"
+    img_dir2 = "img\\img_binary_search"
     save_dir = "img\\output"
 
     os.chdir(root)
@@ -42,15 +43,16 @@ if __name__ == "__main__":
     img_list = glob('****.png')
     img_list.sort()
 
-
+    time_avg = 0
+    time_count=0
 
     for i,img in enumerate(img_list):
+
         A = imageio.imread(img)  # read the first image in the list
         A = utils.rgb_to_gray(A)  # convert image to 8 bit gray
         A[A > 1] = 1
 
-        # plt.imshow(A, cmap='gray')
-        # plt.show()
+        start = time.time_ns()
 
         # ---- Find objects ---- #
         # Filter params
@@ -69,9 +71,9 @@ if __name__ == "__main__":
 
         # filtered_labels = [c.label for c in candidates]
         objects = ndimage.find_objects(labels)
-        for i, obj in enumerate(objects):
+        for j, obj in enumerate(objects):
             if obj is not None:
-                label = i + 1
+                label = j + 1
                 c = Candidate(label)
                 c.size = label_sizes[label]
                 center = [int(s) for s in ndimage.center_of_mass(labels, labels, label)]
@@ -90,6 +92,9 @@ if __name__ == "__main__":
                     continue
                 candidates.append(c)
 
+        time_count += (time.time_ns()-start)/1E9
+        time_avg = time_count/(i+1)
+        print(time_avg)
         # ---- Plotting ---- #
         plt.imshow(labels_masked, cmap='gray')
         for c in candidates:
