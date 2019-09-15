@@ -5,193 +5,19 @@ import imageio
 import time
 
 from skimage import measure
+from scipy import ndimage
 
 import utils
 
-class Candidate():
-    num_candidates = 0
-    candidate_list = []
 
-    def __init__(self, x, y, c_list):
+class Candidate():
+    def __init__(self, label, x, y, size):
         self.valid = True
         self.x = x
         self.y = y
-        self.x_min = x
-        self.x_max = x
-        self.y_min = y
-        self.y_max = y
-        self.size = 1
-        self.num = Candidate.num_candidates
-        self.num_valid = -3
-        Candidate.num_candidates += 1
-        self.candidate_list = c_list
-        self.association = None
+        self.label = label
+        self.size = size
 
-    def print_candidates(self):
-        # ---- Prints all object candidates ---- #
-        for c in self.candidate_list:
-            print(c.num)
-
-    def add(self, x, y):
-        if x > self.x_max:
-            self.x_max = x
-        if x < self.x_min:
-            self.x_min = x
-        if y > self.y_max:
-            self.y_max = y
-        if y < self.y_min:
-            self.y_min = y
-
-        self.size += 1;
-
-    def merge(self, old_candidate):
-        if self.association is None:
-            old_candidate.association = self.num
-        else:
-            old_candidate.association = self.association
-        if old_candidate.valid:
-            old_candidate.valid = False
-
-
-def check_valid(x, y, xmax, ymax):
-    # ---- Ensures checked pixels are not outside bounds of image ---- #
-    if (x >= 0) & (y >= 0) & (x < xmax) & (y < ymax):
-        return True
-    else:
-        return False
-
-
-def check_left(x, y, img):
-    if check_valid(x - 1, y, img.shape[1], img.shape[0]):  # pixel is in image
-        return img[y, x - 1]
-    else:
-        return -1
-
-
-def check_up(x, y, img):
-    if check_valid(x, y - 1, img.shape[1], img.shape[0]):  # pixel is in image
-        return img[y - 1, x]
-    else:
-        return -1
-
-
-def scan(img, candidates):
-    A = img - 2
-    B = A.copy()
-    C = A.copy()
-
-    row_l = 0
-    col_l = 0
-
-    for row in range(A.shape[0]):
-        for col in range(A.shape[1]):
-            A[row_l, col_l] = C[row_l, col_l]
-            A[row, col] = 1
-            row_l = row
-            col_l = col
-
-            if B[row, col] == -1:  # found an object
-                left = check_left(col, row, B)
-                up = check_up(col, row, B)
-
-                if left < 0:  # no object left
-                    if up < 0:  # no object up (new object)
-                        c = Candidate(col, row, candidates)  # create a new ball candidate where the object exists
-                        candidates.append(c)
-                        B[row, col] = c.num
-                    else:  # existing object up
-                        candidates[up].add(col, row)
-                        B[row, col] = candidates[up].num
-                else:  # existing object left
-                    if up < 0:  # no object up
-                        candidates[left].add(col, row)
-                        B[row, col] = candidates[left].num
-                    else:  # two objects that both exist
-                        if candidates[left] == candidates[up]:  # objects are the same
-                            candidates[left].add(col, row)
-                        else:
-                            candidates[up].merge(candidates[left])  # objects are different
-                        B[row, col] = candidates[up].num
-
-        # ---- Plotting ---- #
-        # plt.subplot(1, 2, 1)
-        # plt.axis('off')
-        # plt.imshow(A, cmap='gray', vmin=-2)
-        # plt.subplot(1, 2, 2)
-        # plt.axis('off')
-        # plt.imshow(B, cmap='gray', vmin=-1)
-        # plt.pause(0.001)
-        # os.chdir(root)
-        # os.chdir(save_dir)
-        # plt.savefig('0' + str(row * A.shape[1] + col).zfill(4) + '.png', format='png')
-        # os.chdir(root)
-        # os.chdir(img_dir)
-        # plt.clf()
-
-    return B
-
-
-# def find_parent(list, c):
-#     if list[c].association:
-#         return find_parent(list, list[c].association)
-#     else:
-#         return list[c].num_valid
-
-
-def rescan(A, B, candidates):
-    A = A - 2
-    C = A.copy()
-
-    row_l = 0
-    col_l = 0
-    valid_candidates = []
-    count = 0
-    for c in candidates:
-        if c.valid:
-            c.num_valid = count
-            count += 1
-            valid_candidates.append(c)
-
-    for c in candidates:
-        if not c.valid:
-            parent_num = c.association
-            c.num_valid = candidates[parent_num].num_valid  # match to parent number in valid_candidates
-            if c.x_max > candidates[parent_num].x_max:
-                candidates[parent_num].x_max = c.x_max
-            if c.x_min < candidates[parent_num].x_min:
-                candidates[parent_num].x_min = c.x_min
-            if c.y_max > candidates[parent_num].y_max:
-                candidates[parent_num].y_max = c.y_max
-            if c.y_min < candidates[parent_num].y_min:
-                candidates[parent_num].y_min = c.y_min
-            candidates[parent_num].size += c.size
-
-
-    for row in range(A.shape[0]):
-        for col in range(A.shape[1]):
-            A[row_l, col_l] = C[row_l, col_l]
-            A[row, col] = 1
-            row_l = row
-            col_l = col
-
-            if B[row, col] > -1:  # found an object
-                B[row,col] = candidates[B[row, col]].num_valid
-
-        # ---- Plotting ---- #
-        # plt.subplot(1, 2, 1)
-        # plt.axis('off')
-        # plt.imshow(A, cmap='gray', vmin=-2)
-        # plt.subplot(1, 2, 2)
-        # plt.axis('off')
-        # plt.imshow(B, cmap='gray', vmin=-1)
-        # plt.pause(0.001)
-        # os.chdir(root)
-        # os.chdir(save_dir)
-        # plt.savefig('1' + str(row * A.shape[1] + col).zfill(4) + '.png', format='png')
-        # os.chdir(root)
-        # os.chdir(img_dir)
-        # plt.clf()
-    return valid_candidates
 
 if __name__ == "__main__":
     root = utils.get_project_root()
@@ -214,24 +40,59 @@ if __name__ == "__main__":
 
     A = imageio.imread('test8.bmp')
     A = (~A == 255).astype(int)
+
+    A = imageio.imread('test7.bmp')
+    A = (A == 255).astype(int)
     # plt.imshow(A, cmap='gray')
-
-    # plt.imshow(A-2, cmap='gray')
-
-    start = time.process_time()
-
+    # plt.axis('off')
     # plt.show()
-    # quit()
 
     fig = plt.figure(figsize=(15, np.ceil(15 * A.shape[0] / (A.shape[1] * 2))))
 
     # ---- Find objects ---- #
-    start = time.process_time()
-    potential_candidates = []
-    img_seg = scan(A, potential_candidates)  # segment all objects
-    candidates = rescan(A, img_seg, potential_candidates)  # join objects based on association
+    # Filter params
+    min_size = 1
+    max_size = 400
+    max_ratio = 2.5  # height to width ratio
 
-    # plt.imshow(img_seg,cmap='gray')
-    # plt.show()
+    labels, n_features = ndimage.label(A)  # label image
+    label_sizes = ndimage.sum(A, labels, index=range(n_features + 1))
 
-    print(time.process_time() - start)
+
+    '''
+    need to work out how to:
+        mask labels based on size
+        find centers of remaining labels
+        find bounding box of remaining labels (to determine skew)
+    '''
+    start = time.time_ns()
+    # # mask all objects under a certain size
+    mask = np.bitwise_and(min_size < label_sizes, label_sizes < max_size)
+    labels_masked = mask[labels.ravel()].reshape(labels.shape)
+    labels[~labels_masked] = 0
+
+    candidates = []
+
+    for i, l_size in enumerate(label_sizes):
+        if min_size < l_size < max_size:
+            centers = [int(s) for s in ndimage.center_of_mass(labels_masked, labels, i)]  # find centre of mass of object
+            c = Candidate(i, centers[1], centers[0], l_size)
+            candidates.append(c)
+
+    print((time.time_ns() - start) / 1E9)
+
+    objects = ndimage.find_objects(labels)
+    filtered_labels = [c.label for c in candidates]
+    for label in filtered_labels:
+        print(objects[0])
+        # print(objects[label][0].start)
+
+
+    print(n_features)
+
+    # ---- Plotting ---- #
+    plt.imshow(labels, cmap='gray')
+    for c in candidates:
+        plt.scatter(c.x,c.y,linewidths=5,color='r',marker='x')
+    plt.axis('off')
+    plt.show()

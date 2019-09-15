@@ -34,7 +34,7 @@ if __name__ == "__main__":
 
     img = imageio.imread(img_list[0])  # read the first image in the list
     img_g = utils.rgb_to_gray(img)  # convert image to 8 bit gray
-    img_g = np.array(PIL.Image.fromarray(img_g).resize((int((scale*img_g.shape[1])),int(scale*img_g.shape[0]))))
+    # img_g = np.array(PIL.Image.fromarray(img_g).resize((int((scale*img_g.shape[1])),int(scale*img_g.shape[0]))))
 
     img_mean = np.zeros(img_g.shape)
     img_std = np.zeros(img_g.shape)
@@ -49,7 +49,7 @@ if __name__ == "__main__":
 
     for i,img_iter in enumerate(img_list):
         img_temp = utils.rgb_to_gray(imageio.imread(img_iter))  # convert image to 8 bit gray
-        img_temp = np.array(PIL.Image.fromarray(img_temp).resize((int((scale*img_temp.shape[1])),int(scale*img_temp.shape[0]))))
+        # img_temp = np.array(PIL.Image.fromarray(img_temp).resize((int((scale*img_temp.shape[1])),int(scale*img_temp.shape[0]))))
 
         if i==0:    # set mean to first image
             img_mean = img_temp
@@ -68,20 +68,21 @@ if __name__ == "__main__":
 
 
         # ---- Plotting and saving ---- #
-        plt.subplot(1,2,1)
-        plt.imshow(img_temp,cmap='gray')
-        plt.axis('off')
-        plt.subplot(1,2,2)
-        plt.imshow(C.astype(int), cmap='gray')
-        plt.axis('off')
-        plt.tight_layout()
+        # plt.subplot(1,2,1)
+        # plt.imshow(img_temp,cmap='gray')
+        # plt.axis('off')
+        # plt.subplot(1,2,2)
+        # plt.imshow(C.astype(int), cmap='gray')
+        # plt.axis('off')
+        # plt.tight_layout()
 
         os.chdir(root)
         os.chdir(save_dir)
         # plt.savefig(img_iter, format='png')
+        plt.imsave(str(i).zfill(4) + '.png',C,cmap='gray')
         os.chdir(root)
         os.chdir(img_dir)
-        plt.pause(0.001)
-        plt.clf()
+        # plt.pause(0.001)
+        # plt.clf()
 
     print(time_count/len(img_list))
