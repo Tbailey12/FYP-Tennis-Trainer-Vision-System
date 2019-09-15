@@ -113,20 +113,20 @@ def scan(img, candidates):
                             candidates[up].merge(candidates[left])  # objects are different
                         B[row, col] = candidates[up].num
 
-            # ---- Plotting ---- #
-            plt.subplot(1, 2, 1)
-            plt.axis('off')
-            plt.imshow(A, cmap='gray', vmin=-2)
-            plt.subplot(1, 2, 2)
-            plt.axis('off')
-            plt.imshow(B, cmap='gray', vmin=-1)
-            # plt.pause(0.001)
-            os.chdir(root)
-            os.chdir(save_dir)
-            plt.savefig('0' + str(row * A.shape[1] + col).zfill(4) + '.png', format='png')
-            os.chdir(root)
-            os.chdir(img_dir)
-            plt.clf()
+        # ---- Plotting ---- #
+        # plt.subplot(1, 2, 1)
+        # plt.axis('off')
+        # plt.imshow(A, cmap='gray', vmin=-2)
+        # plt.subplot(1, 2, 2)
+        # plt.axis('off')
+        # plt.imshow(B, cmap='gray', vmin=-1)
+        # plt.pause(0.001)
+        # os.chdir(root)
+        # os.chdir(save_dir)
+        # plt.savefig('0' + str(row * A.shape[1] + col).zfill(4) + '.png', format='png')
+        # os.chdir(root)
+        # os.chdir(img_dir)
+        # plt.clf()
 
     return B
 
@@ -177,20 +177,20 @@ def rescan(A, B, candidates):
             if B[row, col] > -1:  # found an object
                 B[row,col] = candidates[B[row, col]].num_valid
 
-            # ---- Plotting ---- #
-            plt.subplot(1, 2, 1)
-            plt.axis('off')
-            plt.imshow(A, cmap='gray', vmin=-2)
-            plt.subplot(1, 2, 2)
-            plt.axis('off')
-            plt.imshow(B, cmap='gray', vmin=-1)
-            # plt.pause(0.001)
-            os.chdir(root)
-            os.chdir(save_dir)
-            plt.savefig('1' + str(row * A.shape[1] + col).zfill(4) + '.png', format='png')
-            os.chdir(root)
-            os.chdir(img_dir)
-            plt.clf()
+        # ---- Plotting ---- #
+        # plt.subplot(1, 2, 1)
+        # plt.axis('off')
+        # plt.imshow(A, cmap='gray', vmin=-2)
+        # plt.subplot(1, 2, 2)
+        # plt.axis('off')
+        # plt.imshow(B, cmap='gray', vmin=-1)
+        # plt.pause(0.001)
+        # os.chdir(root)
+        # os.chdir(save_dir)
+        # plt.savefig('1' + str(row * A.shape[1] + col).zfill(4) + '.png', format='png')
+        # os.chdir(root)
+        # os.chdir(img_dir)
+        # plt.clf()
     return valid_candidates
 
 if __name__ == "__main__":
@@ -212,7 +212,7 @@ if __name__ == "__main__":
                   [0, 0, 0, 1, 1, 1],
                   [1, 1, 0, 0, 0, 0]])
 
-    A = imageio.imread('test4.bmp')
+    A = imageio.imread('test8.bmp')
     A = (~A == 255).astype(int)
     # plt.imshow(A, cmap='gray')
 
@@ -231,7 +231,7 @@ if __name__ == "__main__":
     img_seg = scan(A, potential_candidates)  # segment all objects
     candidates = rescan(A, img_seg, potential_candidates)  # join objects based on association
 
-    plt.imshow(img_seg,cmap='gray')
-    plt.show()
+    # plt.imshow(img_seg,cmap='gray')
+    # plt.show()
 
     print(time.process_time() - start)
