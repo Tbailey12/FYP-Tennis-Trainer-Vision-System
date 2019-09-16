@@ -29,6 +29,9 @@ import io
 import time
 import threading
 import picamera
+import numpy as np
+import matplotlib.pyplot as plt
+from PIL import Image
 
 class ImageProcessor(threading.Thread):
     def __init__(self, owner):
@@ -47,9 +50,13 @@ class ImageProcessor(threading.Thread):
                 try:
                     self.stream.seek(0)
                     # Read the image and do some processing on it
-                    #Image.open(self.stream)
-                    #...
-                    #...
+
+                    
+                    im = Image.open(self.stream) # read image from stream
+                    img = np.array(im) # convert image to numpy array
+                    
+                    
+                    self.owner.done=True
                     # Set done to True if you want the script to terminate
                     # at some point
                     #self.owner.done=True
@@ -81,10 +88,10 @@ class ProcessOutput(object):
                 if self.pool:
                     self.processor = self.pool.pop()
                 else:
+                    print('warning: frame skipped')
                     # No processor's available, we'll have to skip
                     # this frame; you may want to print a warning
                     # here to see whether you hit this case
-                    print('warning: frame skipped')
                     self.processor = None
         if self.processor:
             self.processor.stream.write(buf)
@@ -108,12 +115,11 @@ class ProcessOutput(object):
             proc.join()
 
 with picamera.PiCamera(resolution='VGA') as camera:
-    camera.start_preview()
+    #camera.start_preview()
     time.sleep(2)
     output = ProcessOutput()
     camera.start_recording(output, format='mjpeg')
     while not output.done:
         camera.wait_recording(1)
     camera.stop_recording()
-
-        
+    print('done')
