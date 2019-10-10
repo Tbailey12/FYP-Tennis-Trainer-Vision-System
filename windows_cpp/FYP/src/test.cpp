@@ -17,7 +17,7 @@ void MyFunc(){
 	cv::Mat image;
 	image = cv::imread("img/fish.jpg");
 
-//	std::cout << image.at<cv::Vec3b>(10,10) << std::endl;
+	std::cout << image.at<cv::Vec3b>(10,10) << std::endl;
 	cv::Mat one = cv::Mat::ones(5,5,CV_8UC1);
 	cv::cvtColor(image,image, cv::COLOR_BGR2GRAY);
 	std::cout << image.at<cv::Vec3b>(4,4) << std::endl;
