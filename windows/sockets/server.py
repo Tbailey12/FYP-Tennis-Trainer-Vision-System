@@ -50,7 +50,7 @@ def send_message(use_socket, message):
         use_socket.send(message_header + message)
     except ConnectionResetError as e:
         print("Error", e)
-        sys.exit()
+        return
     print_debug(f"Sent message to server: {message.decode('utf-8')}")
 
 
