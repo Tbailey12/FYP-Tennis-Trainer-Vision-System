@@ -2,10 +2,14 @@
 socket tutorial (SentDex) https://www.youtube.com/watch?v=ytu2yV3Gn1I
 '''
 
-
 import socket
 import select
 import time
+import sys
+
+DEBUG = True
+
+LEFT_CLIENT = 'left'
 
 HEADER_LENGTH = 10
 IP = "127.0.0.1"
@@ -22,6 +26,9 @@ print("Server started")
 sockets_list = [server_socket]  # list of sockets, init with server socket
 clients = {}  # list of clients
 
+def print_debug(my_print):
+    if DEBUG:
+        print(my_print)
 
 def receive_message(client_socket):
     try:
@@ -36,11 +43,31 @@ def receive_message(client_socket):
         return False
 
 
+def send_message(use_socket, message):
+    message = message.encode('utf-8')
+    message_header = f"{len(message):<{HEADER_LENGTH}}".encode('utf-8')  # create message header
+    try:
+        use_socket.send(message_header + message)
+    except ConnectionResetError as e:
+        print("Error", e)
+        sys.exit()
+    print_debug(f"Sent message to server: {message.decode('utf-8')}")
+
+
 while True:
-    time.sleep(0.1)
+    time.sleep(1)
+    for client_socket in sockets_list:
+        if client_socket != server_socket:  # if the socket is not the server socket
+            # send left message
+            if clients[client_socket]['data'].decode('utf-8') == LEFT_CLIENT:
+                print_debug("Sending message to left client")
+                send_message(client_socket, f"test message")
+
+    # syntax for select.select()
     # (sockets we read, sockets we write, sockets that error)
     read_sockets, _, exception_sockets = select.select(sockets_list, [], sockets_list, 0)
 
+    # if any of the read_sockets have new data
     for notified_socket in read_sockets:
         # new client connected
         if notified_socket == server_socket:  # client has connected, so accept and handle connection
@@ -53,6 +80,7 @@ while True:
             clients[client_socket] = client
             print(
                 f"Accepted new connection from {client_address[0]}:{client_address[1]}, client:{client['data'].decode('utf-8')}")
+        # existing client connected
         else:
             message = receive_message(notified_socket)
 
