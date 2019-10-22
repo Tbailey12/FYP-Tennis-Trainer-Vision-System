@@ -55,7 +55,7 @@ while True:
             # send left message
             if clients[client_socket]['data'] == c.LEFT_CLIENT:
                 print_debug("Sending message to left client")
-                # send_message(client_socket, f"test message")
+                sf.send_message(client_socket, 5)
 
     # syntax for select.select()
     # (sockets we read, sockets we write, sockets that error)
@@ -78,14 +78,14 @@ while True:
         else:
             message = sf.receive_message(notified_socket)
 
-            if message is False:
+            if message is None:
                 print(f"Closed connection from {clients[notified_socket]['data']}")
                 sockets_list.remove(notified_socket)
                 del clients[notified_socket]
                 continue
 
             client = clients[notified_socket]
-            print(f"Received message from {client['data']}: {message['data']}")
+            print_debug(f"Received message from {client['data']}: {message['data']}")
 
     # if there is an exception, remove the socket from the list
     for notified_socket in exception_sockets:

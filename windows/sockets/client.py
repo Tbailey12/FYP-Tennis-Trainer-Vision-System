@@ -12,6 +12,7 @@ name = c.LEFT_CLIENT
 
 client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)  # create IPV4 socket for client
 
+
 def print_debug(my_print):
     if c.DEBUG:
         print(my_print)
@@ -42,7 +43,7 @@ def connect_to_server():
             sys.exit()
         print(f"Connection Established to server on {c.IP}:{c.PORT}")
         client_socket.setblocking(False)
-        sf.send_message(client_socket, c.TYPE_STR, name)  # send name to server
+        sf.send_message(client_socket, name)  # send name to server
         break
 
 
@@ -84,6 +85,11 @@ if __name__ == "__main__":
     connect_to_server()
     while True:
         time.sleep(1)
-        # sf.send_message(client_socket, )
-        # send_message(client_socket, f"Time:{datetime.now()}")  # send message to server
-        # message_recv = receive_message()  # receive messages from the server
+        if not sf.send_message(client_socket, f"Time:{datetime.now()}"):
+            sys.exit()  # there was a problem sending the message
+        message_recv = sf.receive_message(client_socket)  # receive messages from the server
+        if message_recv is not None:
+            if isinstance(message_recv['data'], str):
+                print_debug(f"Received message from Server: {message_recv['data']}")
+            elif isinstance(message_recv['data'], int):
+                print(message_recv['data'] * 5)
