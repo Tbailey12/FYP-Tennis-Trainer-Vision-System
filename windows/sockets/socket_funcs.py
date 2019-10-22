@@ -1,6 +1,8 @@
 import socket
 import select
 import pickle
+import errno
+import sys
 
 import consts as c
 
@@ -24,6 +26,8 @@ def send_message(socket, message_data):
 
     try:
         socket.send(message)
+    except ConnectionResetError as e:
+        return None
     except Exception as e:  # could not send message for some reason
         print("Send Error", e)
         return False
@@ -36,6 +40,7 @@ receives a message from the given socket and decodes it
 
 
 def receive_message(client_socket):
+    message_list = []
     try:
         message_header = client_socket.recv(c.HEADER_LENGTH)
         if not len(message_header):  # if something goes wrong, return None
@@ -43,8 +48,16 @@ def receive_message(client_socket):
             return None
         message_length = int(message_header.decode('utf-8'))
         message = pickle.loads(client_socket.recv(message_length))
-    except Exception as e:
-        # print("Recv Error",e)
-        return None
+        message_list.append({"header": message_header, "data": message})
 
-    return {"header": message_header, "data": message}
+    except IOError as e:
+        # errors when there are no more messages to be received
+        if e.errno != errno.EAGAIN and e.errno != errno.EWOULDBLOCK:
+            print('Read error:', str(e))
+            sys.exit()
+        return message_list  # if there are no more messages and no errors
+    except ConnectionResetError as e:
+        return None
+    except Exception as e:
+        print("Recv Error",e)
+        return None

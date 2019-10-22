@@ -6,9 +6,18 @@ import socket
 import select
 import time
 import sys
+from datetime import datetime
 
 import consts as c
 import socket_funcs as sf
+
+
+def print_debug(my_print):
+    if debug:
+        print(my_print)
+
+
+debug = c.DEBUG
 
 server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)  # create IPV4 socket for server
 server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)  # allows us to reconnect to same port
@@ -21,9 +30,15 @@ print("Server started")
 sockets_list = [server_socket]  # list of sockets, init with server socket
 clients = {}  # list of clients
 
-def print_debug(my_print):
-    if c.DEBUG:
-        print(my_print)
+
+def send_to_client(client_name, message):
+    for client_socket in sockets_list:
+        if client_socket != server_socket:  # if the socket is not the server socket
+            # send left message
+            if clients[client_socket]['data'] == client_name:
+                print_debug(f"Sending message to left client: Time: {message}")
+                sf.send_message(client_socket, message)
+
 
 # def receive_message(client_socket):
 #     try:
@@ -49,13 +64,9 @@ def print_debug(my_print):
 
 
 while True:
-    time.sleep(1)
-    for client_socket in sockets_list:
-        if client_socket != server_socket:  # if the socket is not the server socket
-            # send left message
-            if clients[client_socket]['data'] == c.LEFT_CLIENT:
-                print_debug("Sending message to left client")
-                sf.send_message(client_socket, 5)
+    time.sleep(0.5)
+
+    send_to_client(c.LEFT_CLIENT, f"Time:{datetime.now()}")
 
     # syntax for select.select()
     # (sockets we read, sockets we write, sockets that error)

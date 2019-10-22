@@ -8,25 +8,10 @@ from datetime import datetime
 import consts as c
 import socket_funcs as sf
 
-name = c.LEFT_CLIENT
-
-client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)  # create IPV4 socket for client
-
 
 def print_debug(my_print):
-    if c.DEBUG:
+    if debug:
         print(my_print)
-
-
-# def send_message(use_socket, message):
-#     message = message.encode('utf-8')
-#     message_header = f"{len(message):<{c.HEADER_LENGTH}}".encode('utf-8')  # create message header
-#     try:
-#         use_socket.send(message_header + message)
-#     except ConnectionResetError as e:
-#         print("Error", e)
-#         sys.exit()
-#     print_debug(f"Sent message to server: {message.decode('utf-8')}")
 
 
 def connect_to_server():
@@ -44,7 +29,43 @@ def connect_to_server():
         print(f"Connection Established to server on {c.IP}:{c.PORT}")
         client_socket.setblocking(False)
         sf.send_message(client_socket, name)  # send name to server
+        time.sleep(1)
         break
+
+
+debug = c.DEBUG
+
+name = c.LEFT_CLIENT
+
+client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)  # create IPV4 socket for client
+
+if __name__ == "__main__":
+    connect_to_server()
+    while True:
+        time.sleep(0.5)
+        # ----   send messages to the server     ---- #
+        message = f"Time:{datetime.now()}"
+        print_debug(f"Sending message to Server: {message}")
+        if not sf.send_message(client_socket, message):
+            sys.exit()  # there was a problem sending the message
+
+        # ---    receive messages from the server    ---- #
+        message_recv = sf.receive_message(client_socket)  # receive messages from the server
+        if message_recv is not None:
+            if isinstance(message_recv['data'], str):
+                print_debug(f"Received message from Server: {message_recv['data']}")
+            elif isinstance(message_recv['data'], int):
+                print(message_recv['data'] * 5)
+
+# def send_message(use_socket, message):
+#     message = message.encode('utf-8')
+#     message_header = f"{len(message):<{c.HEADER_LENGTH}}".encode('utf-8')  # create message header
+#     try:
+#         use_socket.send(message_header + message)
+#     except ConnectionResetError as e:
+#         print("Error", e)
+#         sys.exit()
+#     print_debug(f"Sent message to server: {message.decode('utf-8')}")
 
 
 # def receive_message():
@@ -79,17 +100,3 @@ def connect_to_server():
 #     # except Exception as e:
 #     #     print('General error', str(e))
 #     #     sys.exit()
-
-
-if __name__ == "__main__":
-    connect_to_server()
-    while True:
-        time.sleep(1)
-        if not sf.send_message(client_socket, f"Time:{datetime.now()}"):
-            sys.exit()  # there was a problem sending the message
-        message_recv = sf.receive_message(client_socket)  # receive messages from the server
-        if message_recv is not None:
-            if isinstance(message_recv['data'], str):
-                print_debug(f"Received message from Server: {message_recv['data']}")
-            elif isinstance(message_recv['data'], int):
-                print(message_recv['data'] * 5)

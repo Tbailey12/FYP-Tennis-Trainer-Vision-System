@@ -1,6 +1,7 @@
 DEBUG = True
 
 LEFT_CLIENT = 'left'
+RIGHT_CLIENT = 'right'
 
 HEADER_LENGTH = 10
 IP = "127.0.0.1"
