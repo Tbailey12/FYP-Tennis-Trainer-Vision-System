@@ -71,34 +71,38 @@ while True:
     # syntax for select.select()
     # (sockets we read, sockets we write, sockets that error)
     read_sockets, _, exception_sockets = select.select(sockets_list, [], sockets_list, 0)
+    # read all messages from clients
+    while (read_sockets):
+        # if any of the read_sockets have new data
+        for notified_socket in read_sockets:
+            # new client connected
+            if notified_socket == server_socket:  # client has connected, so accept and handle connection
+                client_socket, client_address = server_socket.accept()
 
-    # if any of the read_sockets have new data
-    for notified_socket in read_sockets:
-        # new client connected
-        if notified_socket == server_socket:  # client has connected, so accept and handle connection
-            client_socket, client_address = server_socket.accept()
+                client = sf.receive_message(client_socket)
+                if client is None:  # client disconnected while sending
+                    continue
+                sockets_list.append(client_socket)  # append new socket to list of client sockets
+                clients[client_socket] = client
+                print(
+                    f"Accepted new connection from {client_address[0]}:{client_address[1]}, client:{client['data']}")
+            # existing client connected
+            else:
+                message = sf.receive_message(notified_socket)
 
-            client = sf.receive_message(client_socket)
-            if client is None:  # client disconnected while sending
-                continue
-            sockets_list.append(client_socket)  # append new socket to list of client sockets
-            clients[client_socket] = client
-            print(
-                f"Accepted new connection from {client_address[0]}:{client_address[1]}, client:{client['data']}")
-        # existing client connected
-        else:
-            message = sf.receive_message(notified_socket)
+                if message is None:
+                    print(f"Closed connection from {clients[notified_socket]['data']}")
+                    sockets_list.remove(notified_socket)
+                    del clients[notified_socket]
+                    continue
 
-            if message is None:
-                print(f"Closed connection from {clients[notified_socket]['data']}")
-                sockets_list.remove(notified_socket)
-                del clients[notified_socket]
-                continue
+                client = clients[notified_socket]
+                print_debug(f"Received message from {client['data']}: {message['data']}")
 
-            client = clients[notified_socket]
-            print_debug(f"Received message from {client['data']}: {message['data']}")
+        # if there is an exception, remove the socket from the list
+        for notified_socket in exception_sockets:
+            sockets_list.remove(notified_socket)
+            del clients[notified_socket]
 
-    # if there is an exception, remove the socket from the list
-    for notified_socket in exception_sockets:
-        sockets_list.remove(notified_socket)
-        del clients[notified_socket]
+        # if there are more messages to be read, read them
+        read_sockets, _, exception_sockets = select.select(sockets_list, [], sockets_list, 0)

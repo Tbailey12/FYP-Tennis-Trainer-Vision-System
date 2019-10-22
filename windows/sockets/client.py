@@ -42,20 +42,21 @@ client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)  # create IPV4
 if __name__ == "__main__":
     connect_to_server()
     while True:
-        time.sleep(0.5)
+        time.sleep(3)
         # ----   send messages to the server     ---- #
-        message = f"Time:{datetime.now()}"
-        print_debug(f"Sending message to Server: {message}")
-        if not sf.send_message(client_socket, message):
-            sys.exit()  # there was a problem sending the message
+        # message = f"Time:{datetime.now()}"
+        # print_debug(f"Sending message to Server: {message}")
+        # if not sf.send_message(client_socket, message):
+        #     sys.exit()  # there was a problem sending the message
 
-        # ---    receive messages from the server    ---- #
+        # ---    receive all messages from the server    ---- #
         message_recv = sf.receive_message(client_socket)  # receive messages from the server
-        if message_recv is not None:
+        while message_recv is not None:
             if isinstance(message_recv['data'], str):
                 print_debug(f"Received message from Server: {message_recv['data']}")
             elif isinstance(message_recv['data'], int):
                 print(message_recv['data'] * 5)
+            message_recv = sf.receive_message(client_socket)  # receive messages from the server
 
 # def send_message(use_socket, message):
 #     message = message.encode('utf-8')
