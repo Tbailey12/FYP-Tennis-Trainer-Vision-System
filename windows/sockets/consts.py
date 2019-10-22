@@ -1,0 +1,10 @@
+DEBUG = True
+
+LEFT_CLIENT = 'left'
+
+HEADER_LENGTH = 10
+IP = "127.0.0.1"
+PORT = 1234
+
+TYPE_STR = "text"
+TYPE_VAR = "var"
