@@ -64,9 +64,9 @@ def send_to_client(client_name, message):
 
 
 while True:
-    time.sleep(0.5)
+    time.sleep(1)
 
-    send_to_client(c.LEFT_CLIENT, f"Time:{datetime.now()}")
+    send_to_client(c.RIGHT_CLIENT, f"Time:{datetime.now()}")
 
     # syntax for select.select()
     # (sockets we read, sockets we write, sockets that error)
