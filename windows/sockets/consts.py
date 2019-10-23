@@ -9,3 +9,5 @@ PORT = 1234
 
 TYPE_STR = "text"
 TYPE_VAR = "var"
+
+python = 1
