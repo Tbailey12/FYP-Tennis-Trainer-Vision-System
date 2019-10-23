@@ -24,7 +24,7 @@ def send_to_client(client_name, message):
         if client_socket != server_socket:  # if the socket is not the server socket
             # send left message
             if clients[client_socket]['data'] == client_name:
-                print_debug(f"Sending message to left client: Time: {message}")
+                print_debug(f"Sending message to {client_name} client: Time: {message}")
                 sf.send_message(client_socket, message, c.SERVER)
 
 
@@ -60,7 +60,7 @@ def read_all_client_messages():
 
                 client = clients[notified_socket]
                 print_debug(f"Received message from {client['data']}: {message['data']}")
-                message_list.append({client['data'], message['data']})
+                message_list.append({"client": client['data'], "data": message['data']})
 
         # if there is an exception, remove the socket from the list
         for notified_socket in exception_sockets:
@@ -83,13 +83,22 @@ print("Server started")
 sockets_list = [server_socket]  # list of sockets, init with server socket
 clients = {}  # list of clients
 
-while True:
-    time.sleep(1)
+if __name__ == "__main__":
+    message_list = []
+    counter = 0
+    while True:
+        time.sleep(1 / 30)
 
-    # ---- send a message to the client ---- #
-    send_to_client(c.RIGHT_CLIENT, f"Time:{datetime.now()}")
+        # ---- send a message to the client ---- #
+        if counter % 60 == 0:
+            send_to_client(c.RIGHT_CLIENT, f"{counter} Time:{datetime.now()}")
+            send_to_client(c.LEFT_CLIENT, f"{counter} Time:{datetime.now()}")
 
-    # ---- read all messages from clients ---- #
-    message_list = read_all_client_messages()
-    for message in message_list:
-        print(message)
+        # ---- read all messages from clients ---- #
+        message_list.extend(read_all_client_messages())
+
+        if len(message_list) >= 100:
+            print(message_list[-1])
+            del (message_list[:])
+
+        counter += 1

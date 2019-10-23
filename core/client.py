@@ -10,7 +10,7 @@ import socket_funcs as sf
 
 debug = c.DEBUG
 
-name = c.RIGHT_CLIENT
+name = c.LEFT_CLIENT
 
 
 def print_debug(my_print):
@@ -36,6 +36,7 @@ def connect_to_server():
         time.sleep(1)
         break
 
+
 def read_all_server_messages():
     message_list = []
     # ---    receive all messages from the server    ---- #
@@ -46,14 +47,17 @@ def read_all_server_messages():
 
     return message_list
 
+
 client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)  # create IPV4 socket for client
 
 if __name__ == "__main__":
     connect_to_server()
+    counter = 0
     while True:
-        time.sleep(3)
+        time.sleep(1 / 100)
+
         # ----   send messages to the server     ---- #
-        message = f"Time:{datetime.now()}"
+        message = f"[{counter}] Time:{datetime.now()}"
         print_debug(f"Sending message to Server: {message}")
         if not sf.send_message(client_socket, message, c.CLIENT):
             sys.exit()  # there was a problem sending the message
@@ -64,3 +68,5 @@ if __name__ == "__main__":
                 print(f"{message['data']}")
             elif isinstance(message['data'], int):
                 print(message['data'] * 5)
+
+        counter += 1
