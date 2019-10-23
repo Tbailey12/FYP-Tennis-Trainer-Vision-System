@@ -35,19 +35,19 @@ def connect_to_server():
 
 debug = c.DEBUG
 
-name = c.LEFT_CLIENT
+name = c.RIGHT_CLIENT
 
 client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)  # create IPV4 socket for client
 
 if __name__ == "__main__":
     connect_to_server()
     while True:
-        time.sleep(3)
+        time.sleep(1)
         # ----   send messages to the server     ---- #
-        # message = f"Time:{datetime.now()}"
-        # print_debug(f"Sending message to Server: {message}")
-        # if not sf.send_message(client_socket, message):
-        #     sys.exit()  # there was a problem sending the message
+        message = f"Time:{datetime.now()}"
+        print_debug(f"Sending message to Server: {message}")
+        if not sf.send_message(client_socket, message):
+            sys.exit()  # there was a problem sending the message
 
         # ---    receive all messages from the server    ---- #
         message_recv = sf.receive_message(client_socket)  # receive messages from the server
