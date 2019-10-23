@@ -6,13 +6,21 @@ import sys
 
 import consts as c
 
+debug = c.DEBUG
+
+
+def print_debug(my_print):
+    if debug:
+        print(my_print)
+
+
 '''
 pickles and encodes data with a with a defined 'data_type' in the format
 typeheader -> data_type -> messageheader -> message
 '''
 
 
-def send_message(socket, message_data):
+def send_message(socket, message_data, caller):
     # format type header and encode type
     # message_type = data_type.encode('utf-8')
     # type_header = f"{len(message_type):<{c.HEADER_LENGTH}}".encode('utf-8')
@@ -27,6 +35,11 @@ def send_message(socket, message_data):
     try:
         socket.send(message)
     except ConnectionResetError as e:
+        if caller == c.CLIENT:  # close the client if the server has disconnected
+            print('Error: Server has disconnected, closing client')
+            sys.exit()
+        elif caller == c.SERVER:  # return None if the client has disconnected
+            return None
         return None
     except Exception as e:  # could not send message for some reason
         print("Send Error", e)
@@ -39,7 +52,7 @@ receives a message from the given socket and decodes it
 '''
 
 
-def receive_message(client_socket):
+def receive_message(client_socket, caller):
     try:
         message_header = client_socket.recv(c.HEADER_LENGTH)
         if not len(message_header):  # if something goes wrong, return None
@@ -52,11 +65,19 @@ def receive_message(client_socket):
     except IOError as e:
         # errors when there are no more messages to be received
         if e.errno != errno.EAGAIN and e.errno != errno.EWOULDBLOCK:
-            print('Read error:', str(e))
-            sys.exit()
+            print_debug(f"Read Error:{str(e)}")
+            if caller == c.CLIENT:  # close the client if the server has disconnected
+                print('Error: Server has disconnected, closing client')
+                sys.exit()
+            elif caller == c.SERVER:  # return None if the client has disconnected
+                return None
         return None  # if there are no more messages and no errors
     except ConnectionResetError as e:
-        return None
+        if caller == c.CLIENT:  # close the client if the server has disconnected
+            print('Error: Server has disconnected, closing client')
+            sys.exit()
+        elif caller == c.SERVER:  # return None if the client has disconnected
+            return None
     except Exception as e:
-        print("Recv Error",e)
+        print("Recv Error", e)  # could not receive message for some reason
         return None
