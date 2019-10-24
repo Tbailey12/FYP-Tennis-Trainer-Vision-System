@@ -10,7 +10,7 @@ import socket_funcs as sf
 
 debug = c.DEBUG
 
-name = c.LEFT_CLIENT
+name = c.RIGHT_CLIENT
 
 
 def print_debug(my_print):
