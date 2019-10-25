@@ -90,9 +90,9 @@ if __name__ == "__main__":
         time.sleep(1 / 30)
 
         # ---- send a message to the client ---- #
-        # if counter % 60 == 0:
-            # send_to_client(c.RIGHT_CLIENT, f"{counter} Time:{datetime.now()}")
-            # send_to_client(c.LEFT_CLIENT, f"{counter} Time:{datetime.now()}")
+        if counter % 60 == 0:
+            send_to_client(c.RIGHT_CLIENT, f"{counter} Time:{datetime.now()}")
+            send_to_client(c.LEFT_CLIENT, f"{counter} Time:{datetime.now()}")
 
         # ---- read all messages from clients ---- #
         message_list.extend(read_all_client_messages())

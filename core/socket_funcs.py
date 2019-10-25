@@ -68,9 +68,7 @@ def receive_message(client_socket, caller):
             print("Connection closed unexpectedly")
             return None
         message_length = int(message_header.decode('utf-8'))
-        print(f"m_len: {message_length}")
         received = client_socket.recv(message_length)
-        print(f"r_len: {len(received)}")
         while len(received) < message_length:
             bytes_remaining = message_length - len(received)
             received += client_socket.recv(bytes_remaining)
