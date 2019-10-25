@@ -24,14 +24,12 @@ def connect_to_server():
         try:
             client_socket.connect((c.IP, c.PORT))  # connect to server
         except socket.error as e:
-            print(f"Error: {e}")
             print("Connection could not be established to server, trying again...")
-            time.sleep(1)
+            time.sleep(5)
             continue
         except socket.timeout as e:
-            print(f"Error: {e}")
             print("Connection could not be established to server, trying again...")
-            time.sleep(1)
+            time.sleep(5)
             continue
         except Exception as e:
             print('Error', str(e))
