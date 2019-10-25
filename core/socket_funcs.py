@@ -28,12 +28,11 @@ def send_message(socket, message_data, caller):
     # format message header and encode message
     message = pickle.dumps(message_data)
     message_header = f"{len(message):<{c.HEADER_LENGTH}}".encode('utf-8')
-    print(len(message))
     # construct message
     message = bytes(message_header) + message
 
     try:
-        socket.send(message)
+        socket.sendall(message)
     except ConnectionResetError as e:
         if caller == c.CLIENT:  # close the client if the server has disconnected
             print('Error: Server has disconnected, closing client')
@@ -69,7 +68,6 @@ def receive_message(client_socket, caller):
             print("Connection closed unexpectedly")
             return None
         message_length = int(message_header.decode('utf-8'))
-        print(message_length)
         message = pickle.loads(client_socket.recv(message_length))
         return {"header": message_header, "data": message}
 
