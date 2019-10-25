@@ -71,6 +71,8 @@ def receive_message(client_socket, caller):
         print(f"m_len: {message_length}")
         received = client_socket.recv(message_length)
         print(f"r_len: {len(received)}")
+        while len(received) < message_length:
+            received += client_socket.recv(message_length)
         message = pickle.loads(received)
         return {"header": message_header, "data": message}
 
