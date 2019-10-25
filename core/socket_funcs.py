@@ -68,7 +68,10 @@ def receive_message(client_socket, caller):
             print("Connection closed unexpectedly")
             return None
         message_length = int(message_header.decode('utf-8'))
-        message = pickle.loads(client_socket.recv(message_length))
+        print(f"m_len: {message_length}")
+        received = client_socket.recv(message_length)
+        print(f"r_len: {received}")
+        message = pickle.loads(received)
         return {"header": message_header, "data": message}
 
     except IOError as e:
