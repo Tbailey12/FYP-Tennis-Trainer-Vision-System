@@ -28,6 +28,11 @@ def connect_to_server():
             print("Connection could not be established to server, trying again...")
             time.sleep(1)
             continue
+        except socket.timeout as e:
+            print(f"Error: {e}")
+            print("Connection could not be established to server, trying again...")
+            time.sleep(1)
+            continue
         except Exception as e:
             print('Error', str(e))
             sys.exit()
@@ -49,7 +54,8 @@ def read_all_server_messages():
     return message_list
 
 
-client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)  # create IPV4 socket for client
+client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)  # create IPV4 socket for
+client_socket.settimeout(c.SOCKET_TIMEOUT)
 
 if __name__ == "__main__":
     connect_to_server()

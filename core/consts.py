@@ -6,8 +6,8 @@ CLIENT = 'client'
 LEFT_CLIENT = 'left'
 RIGHT_CLIENT = 'right'
 
+SOCKET_TIMEOUT = 10
 HEADER_LENGTH = 10
-# IP = "PiRight.local"
 IP = "192.168.20.6"
 # IP = "127.0.0.1"
 PORT = 1234
