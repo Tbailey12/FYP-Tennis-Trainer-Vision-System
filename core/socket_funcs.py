@@ -70,7 +70,7 @@ def receive_message(client_socket, caller):
         message_length = int(message_header.decode('utf-8'))
         print(f"m_len: {message_length}")
         received = client_socket.recv(message_length)
-        print(f"r_len: {received}")
+        print(f"r_len: {len(received)}")
         message = pickle.loads(received)
         return {"header": message_header, "data": message}
 
