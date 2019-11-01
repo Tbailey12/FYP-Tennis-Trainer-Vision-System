@@ -79,16 +79,19 @@ if __name__ == "__main__":
     z2 = solve_numeric(30, 8.1, 0, 2500, TOPSPIN, 0, 0, 1, 0, 5, 500)
     z3 = solve_numeric(30, 8.1, 0, 2500, BACKSPIN, 0, 0, 1, 0, 5, 500)
 
+    z = [z1, z2, z3]
+
     fig = plt.figure()
     ax = plt.axes(projection='3d')
     # plot results
-    ax.plot3D(z[:, 1], z[:, 3], z[:, 5], 'r')
-    ax.plot3D(z1[:, 1], z1[:, 3], z1[:, 5], 'b')
-    ax.plot3D(z2[:, 1], z2[:, 3], z2[:, 5], 'k')
+    for z_arr in z:
+        z_arr = z_arr[z_arr[:,5]>0]
+        ax.plot3D(z_arr[:, 1], z_arr[:, 3], z_arr[:, 5])
     ax.set_xlabel('x')
     ax.set_ylabel('y')
     ax.set_zlabel('z')
     ax.set_xlim(-10.97 / 2, 10.97 / 2)
     ax.set_ylim(0, 11.89 * 2)
     ax.set_zlim(0, 5)
+    ax.legend(['Spin = 0rpm','Topspin = 2500rpm','Backspin = 2500rpm'])
     plt.show()
