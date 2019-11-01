@@ -18,10 +18,10 @@ m = 58E-3;  # mass in kg
 # cl = 0;  # change later to formula
 g = 9.81;  # gravitational acceleration
 
-elev = 8.1 * (np.pi / 180);  # launch elevation in radians
-azimuth = 10 * (np.pi / 180);  # launch elevation in radians
+elev = 90 * (np.pi / 180);  # launch elevation in radians
+azimuth = 0 * (np.pi / 180);  # launch elevation in radians
 v0 = 25;  # launch velocity in m/s
-spin = 2500  # rotational speed in rpm
+spin = 0  # rotational speed in rpm
 spin_dir = TOPSPIN
 vx0 = v0 * np.cos(elev) * np.sin(azimuth)  # initial velocity
 vy0 = v0 * np.cos(elev) * np.cos(azimuth)  # initial y velocity
@@ -50,7 +50,12 @@ v_arr = []
 def model(x, t):
     vx = x[0] / m
     vy = x[2] / m
-    vz = x[4] / m
+
+    # if z is less than zero, set z=0 so ball can't go through the ground
+    if x[5] > 0:
+        vz = x[4] / m
+    else:
+        vz = 0
 
     v = np.sqrt(vx ** 2 + vy ** 2 + vz ** 2)
     v_p = np.sqrt(vx ** 2 + vy ** 2)
@@ -79,16 +84,24 @@ t = np.linspace(0, 5, num=500)
 
 # solve ODE
 z = odeint(model, z0, t)
-# spin = 2500
-# vspin = r * spin * 2 * np.pi / 60
-# z1 = odeint(model, z0, t)
+spin_dir = TOPSPIN
+spin = 2500
+vspin = r * spin * 2 * np.pi / 60
+z1 = odeint(model, z0, t)
+spin_dir = BACKSPIN
+spin = 2500
+vspin = r * spin * 2 * np.pi / 60
+z2 = odeint(model, z0, t)
 
 fig = plt.figure()
 ax = plt.axes(projection='3d')
 
+print(z[:, 3])
+
 # plot results
 ax.plot3D(z[:, 1], z[:, 3], z[:, 5])
-# ax.plot3D(z1[:, 1], z1[:, 3], z1[:, 5])
+ax.plot3D(z1[:, 1], z1[:, 3], z1[:, 5])
+ax.plot3D(z2[:, 1], z2[:, 3], z2[:, 5])
 ax.set_xlabel('x')
 ax.set_ylabel('y')
 ax.set_zlabel('z')
