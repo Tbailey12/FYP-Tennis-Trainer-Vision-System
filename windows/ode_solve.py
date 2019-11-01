@@ -9,7 +9,6 @@ from mpl_toolkits import mplot3d
 
 BACKSPIN = 1
 TOPSPIN = -1
-TOL = 1E-6
 
 r = 3.3E-2;  # ball radius
 A = np.pi * r ** 2;  # ball csa
@@ -19,10 +18,10 @@ m = 58E-3;  # mass in kg
 # cl = 0;  # change later to formula
 g = 9.81;  # gravitational acceleration
 
-elev = 10 * (np.pi / 180);  # launch elevation in radians
+elev = 8.1 * (np.pi / 180);  # launch elevation in radians
 azimuth = 0 * (np.pi / 180);  # launch elevation in radians
 v0 = 30;  # launch velocity in m/s
-spin = 2500  # rotational speed in rpm
+spin = 500  # rotational speed in rpm
 spin_dir = BACKSPIN
 vx0 = v0 * np.cos(elev) * np.sin(azimuth)  # initial velocity
 vy0 = v0 * np.cos(elev) * np.cos(azimuth)  # initial y velocity
@@ -55,24 +54,13 @@ def model(x, t):
 
     v = np.sqrt(vx ** 2 + vy ** 2 + vz ** 2)
     v_p = np.sqrt(vx ** 2 + vy ** 2)
-    # for cos(theta)
-    if vy == 0:
-        c_t = 0
-    else:
-        c_t = vy / v_p
-
-    # for sin(theta)
-    if vx == 0:
-        s_t = 0
-    else:
-        s_t = vx / v_p
 
     cd = calc_cd(v, vspin)  # coefficient of drag
     cl = calc_cl(v, vspin, spin_dir)  # coefficient of lift
 
-    dPxdt = (-A * d * v / 2) * (cl * vz * s_t + cd * vx)
+    dPxdt = (-A * d * v / 2) * (cl * vz * np.sin(azimuth) + cd * vx)
     dxdt = vx
-    dPydt = (-A * d * v / 2) * (cl * vz * c_t + cd * vy)
+    dPydt = (-A * d * v / 2) * (cl * vz * np.cos(azimuth) + cd * vy)
     dydt = vy
     dPzdt = (A * d * v / 2) * (cl * v_p - cd * vz) - m * g
     dzdt = vz
