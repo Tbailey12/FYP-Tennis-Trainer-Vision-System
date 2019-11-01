@@ -9,6 +9,7 @@ from mpl_toolkits import mplot3d
 
 BACKSPIN = 1
 TOPSPIN = -1
+TOL = 1E-6
 
 r = 3.3E-2;  # ball radius
 A = np.pi * r ** 2;  # ball csa
@@ -18,11 +19,11 @@ m = 58E-3;  # mass in kg
 # cl = 0;  # change later to formula
 g = 9.81;  # gravitational acceleration
 
-elev = 90 * (np.pi / 180);  # launch elevation in radians
+elev = 10 * (np.pi / 180);  # launch elevation in radians
 azimuth = 0 * (np.pi / 180);  # launch elevation in radians
-v0 = 25;  # launch velocity in m/s
-spin = 0  # rotational speed in rpm
-spin_dir = TOPSPIN
+v0 = 30;  # launch velocity in m/s
+spin = 2500  # rotational speed in rpm
+spin_dir = BACKSPIN
 vx0 = v0 * np.cos(elev) * np.sin(azimuth)  # initial velocity
 vy0 = v0 * np.cos(elev) * np.cos(azimuth)  # initial y velocity
 vz0 = v0 * np.sin(elev)
@@ -50,24 +51,28 @@ v_arr = []
 def model(x, t):
     vx = x[0] / m
     vy = x[2] / m
-
-    # if z is less than zero, set z=0 so ball can't go through the ground
-    if x[5] > 0:
-        vz = x[4] / m
-    else:
-        vz = 0
+    vz = x[4] / m
 
     v = np.sqrt(vx ** 2 + vy ** 2 + vz ** 2)
     v_p = np.sqrt(vx ** 2 + vy ** 2)
+    # for cos(theta)
+    if vy == 0:
+        c_t = 0
+    else:
+        c_t = vy / v_p
 
-    cd = calc_cd(v, vspin)
-    cl = calc_cl(v, vspin, spin_dir)
+    # for sin(theta)
+    if vx == 0:
+        s_t = 0
+    else:
+        s_t = vx / v_p
 
-    dPxdt = (-A * d * v * vx / 2) * (cl * vz / v_p + cd)
-    # dPxdt = (-A * d * v * vx / 2) * (cl + cd)
+    cd = calc_cd(v, vspin)  # coefficient of drag
+    cl = calc_cl(v, vspin, spin_dir)  # coefficient of lift
+
+    dPxdt = (-A * d * v / 2) * (cl * vz * s_t + cd * vx)
     dxdt = vx
-    dPydt = (-A * d * v * vy / 2) * (cl * vz / v_p + cd)
-    # dPydt = (-A * d * v * vy / 2) * (cl + cd)
+    dPydt = (-A * d * v / 2) * (cl * vz * c_t + cd * vy)
     dydt = vy
     dPzdt = (A * d * v / 2) * (cl * v_p - cd * vz) - m * g
     dzdt = vz
@@ -80,28 +85,25 @@ def model(x, t):
 z0 = [vx0 * m, 0, vy0 * m, 0, vz0 * m, 1]
 
 # time points
-t = np.linspace(0, 5, num=500)
+t = np.linspace(0, 10, num=500)
 
 # solve ODE
 z = odeint(model, z0, t)
 spin_dir = TOPSPIN
-spin = 2500
 vspin = r * spin * 2 * np.pi / 60
 z1 = odeint(model, z0, t)
 spin_dir = BACKSPIN
-spin = 2500
+spin = 0
 vspin = r * spin * 2 * np.pi / 60
 z2 = odeint(model, z0, t)
 
 fig = plt.figure()
 ax = plt.axes(projection='3d')
 
-print(z[:, 3])
-
 # plot results
-ax.plot3D(z[:, 1], z[:, 3], z[:, 5])
-ax.plot3D(z1[:, 1], z1[:, 3], z1[:, 5])
-ax.plot3D(z2[:, 1], z2[:, 3], z2[:, 5])
+ax.plot3D(z[:, 1], z[:, 3], z[:, 5], 'r')
+ax.plot3D(z1[:, 1], z1[:, 3], z1[:, 5], 'b')
+ax.plot3D(z2[:, 1], z2[:, 3], z2[:, 5], 'k')
 ax.set_xlabel('x')
 ax.set_ylabel('y')
 ax.set_zlabel('z')
