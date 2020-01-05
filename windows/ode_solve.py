@@ -7,6 +7,8 @@ from scipy.integrate import odeint
 import matplotlib.pyplot as plt
 from mpl_toolkits import mplot3d
 
+plt.style.use('seaborn-deep')
+
 BACKSPIN = 1
 TOPSPIN = -1
 
@@ -80,10 +82,11 @@ def solve_numeric(v0, elev, azimuth, spin, spin_dir, x0, y0, z0, start, end, num
 
 
 if __name__ == "__main__":
-    z1 = solve_numeric(30, 8.1, 0, 0, BACKSPIN, 0, 0, 1, 0, 5, 1000, 0, 90)
-    z2 = solve_numeric(30, 11.9, 0, 20*60, TOPSPIN, 0, 0, 1, 0, 5, 1000, 0, 90)
+    z1 = solve_numeric(25, 8.1, -6, 0, BACKSPIN, 0, 0, 1, 0, 5, 1000, 10, 90)
+    z2 = solve_numeric(25, 8.1, 0, 0, TOPSPIN, 0, 0, 1, 0, 5, 1000, 10, 90)
+    z3 = solve_numeric(25, 8.1, 6, 0, BACKSPIN, 0, 0, 1, 0, 5, 1000, 10, 90)
 
-    z = [z1,z2]
+    z = [z1, z2, z3]
 
     fig = plt.figure()
     ax = plt.axes(projection='3d')
@@ -91,12 +94,12 @@ if __name__ == "__main__":
     for z_arr in z:
         z_arr = z_arr[z_arr[:, 5] > 0]
         ax.plot3D(z_arr[:, 1], z_arr[:, 3], z_arr[:, 5])
-    ax.set_xlabel('x')
-    ax.set_ylabel('y')
-    ax.set_zlabel('z')
-    ax.set_xlim(-10.97 / 2, 10.97 / 2)
-    ax.set_ylim(0, 11.89 * 2)
-    ax.set_zlim(0, 5)
-    ax.legend(['Spin = 0rpm', 'Topspin = 2500rpm', 'Backspin = 2500rpm'])
-    plt.title('Backspin/Topspin')
+    ax.set_xlabel('x (m)')
+    ax.set_ylabel('y (m)')
+    ax.set_zlabel('z (m)')
+    ax.set_xlim(-23.77 / 2, 23.77 / 2)
+    ax.set_ylim(0, 23.77)
+    ax.set_zlim(0, 23.77)
+    ax.legend(['Azimuth = -6°', 'Azimuth = 0°', 'Azimuth = 6°'])
+    # plt.title('Backspin/Topspin')
     plt.show()
