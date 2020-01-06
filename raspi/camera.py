@@ -74,11 +74,15 @@ class ProcessOutput(object):
         # Construct a pool of 4 image processors along with a lock
         # to control access between threads
         self.lock = threading.Lock()
-        self.pool = [ImageProcessor(self) for i in range(4)]
+        self.pool = [ImageProcessor(self) for i in range(5)]
         self.processor = None
+        self.start = time.time()
 
     def write(self, buf):
         if buf.startswith(b'\xff\xd8'):
+            # print fps
+            print((time.time()-self.start))
+            self.start = time.time()
             # New frame; set the current processor going and grab
             # a spare one
             if self.processor:
@@ -115,13 +119,14 @@ class ProcessOutput(object):
             proc.terminated = True
             proc.join()
 
-with picamera.PiCamera(resolution='VGA') as camera:
+with picamera.PiCamera(resolution='VGA',framerate=24) as camera:
     #camera.start_preview()
+    camera.vflip=True
     time.sleep(2)
     output = ProcessOutput()
     camera.start_recording(output, format='mjpeg')
     while not output.done:
-        camera.wait_recording(1)
+        camera.wait_recording(10)
         print('recording')
     print('before')
     camera.stop_recording()
