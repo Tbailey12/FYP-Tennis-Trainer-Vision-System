@@ -32,41 +32,86 @@ import picamera
 import numpy as np
 import matplotlib.pyplot as plt
 from PIL import Image
+import multiprocessing
+import queue
+import cv2
 
+def ImageProcessor(unprocessed_frames):
+    stream = io.BytesIO()
+    # self.event = multiprocessing.Event()
+    terminated = False
 
-import io
-import time
-import picamera
+    while not terminated:
+        try:
+            # attempts to get a new frame, raises exception if none available
+            frame_num, frame = unprocessed_frames.get_nowait()
+            stream.write(frame)
+            stream.seek(0)
+            # Read the image and do some processing on it
 
-class SplitFrames(object):
+            im = Image.open(stream) # read image from stream
+            img = np.array(im) # convert image to numpy array
+            cv2.imwrite(f'{frame_num}.png',img)
+            # print(frame_num)
+
+            # Reset the stream
+            stream.seek(0)
+            stream.truncate()
+
+        except queue.Empty:
+            # print('queue is empty')
+            continue
+
+class ProcessOutput(object):
     def __init__(self):
+        self.number_of_processors = 8
+        self.unprocessed_frames = multiprocessing.Queue()
+        self.processes = []
         self.frame_num = 0
-        self.output = None
+        self.start = time.time()
+
+        for i in range(self.number_of_processors):
+            processor = multiprocessing.Process(target=ImageProcessor, args=(self.unprocessed_frames,))
+            self.processes.append(processor)
+            processor.start()
 
     def write(self, buf):
-        if buf.startswith(b'\xff\xd8'):
-            # Start of new frame; close the old one (if any) and
-            # open a new output
-            if self.output:
-                self.output.close()
+        if buf.startswith(b'\xff\xd8'): # start of a new frame
+            self.unprocessed_frames.put((self.frame_num, buf)) # add the new frame to the buffer
             self.frame_num += 1
-            self.output = io.open('image%02d.jpg' % self.frame_num, 'wb')
-        self.output.write(buf)
 
-with picamera.PiCamera(resolution='720p', framerate=30) as camera:
-    camera.start_preview()
-    # Give the camera some warm-up time
+    def flush(self):
+        print('flushing')
+        # When told to flush (this indicates end of recording), shut
+        # down in an orderly fashion.
+
+        for p in self.processes:
+            p.close()
+            p.join()
+
+with picamera.PiCamera(resolution='VGA',framerate=90) as camera:
+    #camera.start_preview()
+    camera.vflip=True
     time.sleep(2)
-    output = SplitFrames()
-    start = time.time()
-    camera.start_recording(output, format='bgr')
-    camera.wait_recording(2)
-    camera.stop_recording()
-    finish = time.time()
-print('Captured %d frames at %.2ffps' % (
-    output.frame_num,
-    output.frame_num / (finish - start)))
+    output = ProcessOutput()
+    camera.start_recording(output, format='mjpeg')
+    
+    try:
+        camera.wait_recording(1)
+    finally:
+        try:
+            output.unprocessed_frames.get_nowait()
+        except queue.Empty:
+            time.sleep(2)
+            print('before')
+            # camera.stop_recording()
+            camera.close()
+            print('after')
 
+# import io
+# import time
+# import threading
+# import picamera
 
 # class ImageProcessor(threading.Thread):
 #     def __init__(self, owner):
@@ -76,7 +121,7 @@ print('Captured %d frames at %.2ffps' % (
 #         self.terminated = False
 #         self.owner = owner
 #         self.start()
-#
+
 #     def run(self):
 #         # This method runs in a separate thread
 #         while not self.terminated:
@@ -85,16 +130,12 @@ print('Captured %d frames at %.2ffps' % (
 #                 try:
 #                     self.stream.seek(0)
 #                     # Read the image and do some processing on it
-#
-#
-#                     im = Image.open(self.stream) # read image from stream
-#                     img = np.array(im) # convert image to numpy array
-#
-#
-#                     self.owner.done=True
+#                     #Image.open(self.stream)
+#                     #...
+#                     #...
 #                     # Set done to True if you want the script to terminate
 #                     # at some point
-#                     #self.owner.done=True
+#                     # self.owner.done=True
 #                 finally:
 #                     # Reset the stream and event
 #                     self.stream.seek(0)
@@ -103,7 +144,7 @@ print('Captured %d frames at %.2ffps' % (
 #                     # Return ourselves to the available pool
 #                     with self.owner.lock:
 #                         self.owner.pool.append(self)
-#
+
 # class ProcessOutput(object):
 #     def __init__(self):
 #         self.done = False
@@ -112,7 +153,7 @@ print('Captured %d frames at %.2ffps' % (
 #         self.lock = threading.Lock()
 #         self.pool = [ImageProcessor(self) for i in range(4)]
 #         self.processor = None
-#
+
 #     def write(self, buf):
 #         if buf.startswith(b'\xff\xd8'):
 #             # New frame; set the current processor going and grab
@@ -123,14 +164,13 @@ print('Captured %d frames at %.2ffps' % (
 #                 if self.pool:
 #                     self.processor = self.pool.pop()
 #                 else:
-#                     print('warning: frame skipped')
 #                     # No processor's available, we'll have to skip
 #                     # this frame; you may want to print a warning
 #                     # here to see whether you hit this case
 #                     self.processor = None
 #         if self.processor:
 #             self.processor.stream.write(buf)
-#
+
 #     def flush(self):
 #         # When told to flush (this indicates end of recording), shut
 #         # down in an orderly fashion. First, add the current processor
@@ -148,13 +188,18 @@ print('Captured %d frames at %.2ffps' % (
 #                     pass # pool is empty
 #             proc.terminated = True
 #             proc.join()
-#
+
 # with picamera.PiCamera(resolution='VGA') as camera:
-#     #camera.start_preview()
+#     camera.start_preview()
 #     time.sleep(2)
 #     output = ProcessOutput()
 #     camera.start_recording(output, format='mjpeg')
-#     while not output.done:
-#         camera.wait_recording(1)
-#     camera.stop_recording()
-#     print('done')
+#     try:
+#         while not output.done:
+#             camera.wait_recording(1)
+#     finally:
+#         time.sleep(2)
+#         print('before')
+#         # camera.stop_recording()
+#         camera.close()
+#         print('after')
