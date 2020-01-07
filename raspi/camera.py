@@ -35,8 +35,16 @@ from PIL import Image
 import multiprocessing
 import queue
 import cv2
+import os
 
-def ImageProcessor(unprocessed_frames):
+def print_l(print_lock, message):
+    print_lock.acquire()
+    try: 
+        print(message)
+    finally:
+        print_lock.release()
+
+def ImageProcessor(unprocessed_frames, print_lock):
     stream = io.BytesIO()
     # self.event = multiprocessing.Event()
     terminated = False
@@ -51,7 +59,14 @@ def ImageProcessor(unprocessed_frames):
 
             im = Image.open(stream) # read image from stream
             img = np.array(im) # convert image to numpy array
-            cv2.imwrite(f'{frame_num}.png',img)
+
+            # print_l(print_lock,img)
+            print_lock.acquire()
+            cv2.imwrite(str(frame_num)+'.png',img)
+            print_lock.release()
+            # print_l(print_lock,frame_num)
+            for i in range(1000000):
+                temp = i*i
             # print(frame_num)
 
             # Reset the stream
@@ -59,7 +74,6 @@ def ImageProcessor(unprocessed_frames):
             stream.truncate()
 
         except queue.Empty:
-            # print('queue is empty')
             continue
 
 class ProcessOutput(object):
@@ -67,26 +81,29 @@ class ProcessOutput(object):
         self.number_of_processors = 8
         self.unprocessed_frames = multiprocessing.Queue()
         self.processes = []
+        self.print_lock = multiprocessing.Lock()
         self.frame_num = 0
         self.start = time.time()
+        self.done = False
 
         for i in range(self.number_of_processors):
-            processor = multiprocessing.Process(target=ImageProcessor, args=(self.unprocessed_frames,))
+            processor = multiprocessing.Process(target=ImageProcessor, args=(self.unprocessed_frames, self.print_lock))
             self.processes.append(processor)
             processor.start()
 
     def write(self, buf):
-        if buf.startswith(b'\xff\xd8'): # start of a new frame
-            self.unprocessed_frames.put((self.frame_num, buf)) # add the new frame to the buffer
-            self.frame_num += 1
+        if self.done is False:
+            if buf.startswith(b'\xff\xd8'): # start of a new frame
+                self.unprocessed_frames.put((self.frame_num, buf)) # add the new frame to the buffer
+                self.frame_num += 1
 
     def flush(self):
-        print('flushing')
+        # print('flushing')
         # When told to flush (this indicates end of recording), shut
         # down in an orderly fashion.
 
         for p in self.processes:
-            p.close()
+            p.terminate()
             p.join()
 
 with picamera.PiCamera(resolution='VGA',framerate=90) as camera:
@@ -96,18 +113,24 @@ with picamera.PiCamera(resolution='VGA',framerate=90) as camera:
     output = ProcessOutput()
     camera.start_recording(output, format='mjpeg')
     
-    try:
+    try:   
         camera.wait_recording(1)
-    finally:
+    finally:   
+        output.done = True
+        
+        #----- There needs to be a signal or something here from the process
+        # to indicate that it is complete, not sure how to do this
+
+        time.sleep(2)
+    while(True):
+        # print_l(output.print_lock,f'queue: {output.unprocessed_frames.qsize()}')
         try:
             output.unprocessed_frames.get_nowait()
         except queue.Empty:
-            time.sleep(2)
-            print('before')
-            # camera.stop_recording()
             camera.close()
-            print('after')
-
+            # time.sleep(2)
+            # camera.stop_recording()
+            break
 # import io
 # import time
 # import threading
