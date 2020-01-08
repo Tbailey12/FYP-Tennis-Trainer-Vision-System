@@ -1,30 +1,3 @@
-'''
-import time
-import picamera
-import numpy as np
-import matplotlib.pyplot as plt
-
-class MyOutput(object):
-    def write(self, buf):
-        y_data = np.frombuffer(buf,dtype=np.uint8,count=128*96).reshape((96,128))
-        print(y_data[0, 0])
-        
-    def flush(self):
-        pass
-
-if __name__ == "__main__":
-    #camera setup
-    with picamera.PiCamera() as camera:
-        camera.sensor_mode = 4
-        camera.resolution = (128,96)
-        camera.framerate = 90
-        time.sleep(2) # wait for the camera to warm up
-        output = MyOutput()
-        camera.start_recording(output,'yuv')
-        camera.wait_recording(0)
-        camera.stop_recording()
-'''
-# source https://picamera.readthedocs.io/en/release-1.13/recipes2.html#rapid-capture
 import io
 import time
 import threading
@@ -36,6 +9,7 @@ import multiprocessing
 import queue
 import cv2
 import os
+import ctypes
 
 def print_l(print_lock, message):
     print_lock.acquire()
@@ -44,12 +18,11 @@ def print_l(print_lock, message):
     finally:
         print_lock.release()
 
-def ImageProcessor(unprocessed_frames, print_lock):
+def ImageProcessor(unprocessed_frames, print_lock, process_run):
     stream = io.BytesIO()
     # self.event = multiprocessing.Event()
-    terminated = False
 
-    while not terminated:
+    while process_run:
         try:
             # attempts to get a new frame, raises exception if none available
             frame_num, frame = unprocessed_frames.get_nowait()
@@ -61,21 +34,18 @@ def ImageProcessor(unprocessed_frames, print_lock):
             img = np.array(im) # convert image to numpy array
 
             # print_l(print_lock,img)
-            print_lock.acquire()
-            cv2.imwrite(str(frame_num)+'.png',img)
-            print_lock.release()
-            # print_l(print_lock,frame_num)
-            for i in range(1000000):
-                temp = i*i
-            # print(frame_num)
-
+            # print_lock.acquire()
+            cv2.imwrite(f'{frame_num:03d}.png',img)
+            # print_lock.release()
             # Reset the stream
             stream.seek(0)
             stream.truncate()
 
         except queue.Empty:
+            if process_run.value is False:
+                break
             continue
-
+    return
 class ProcessOutput(object):
     def __init__(self):
         self.number_of_processors = 8
@@ -85,9 +55,10 @@ class ProcessOutput(object):
         self.frame_num = 0
         self.start = time.time()
         self.done = False
+        self.process_run = multiprocessing.Value(ctypes.c_bool,True)
 
         for i in range(self.number_of_processors):
-            processor = multiprocessing.Process(target=ImageProcessor, args=(self.unprocessed_frames, self.print_lock))
+            processor = multiprocessing.Process(target=ImageProcessor, args=(self.unprocessed_frames, self.print_lock, self.process_run))
             self.processes.append(processor)
             processor.start()
 
@@ -112,25 +83,23 @@ with picamera.PiCamera(resolution='VGA',framerate=90) as camera:
     time.sleep(2)
     output = ProcessOutput()
     camera.start_recording(output, format='mjpeg')
-    
+
     try:   
         camera.wait_recording(1)
-    finally:   
-        output.done = True
-        
-        #----- There needs to be a signal or something here from the process
-        # to indicate that it is complete, not sure how to do this
+    finally:
+        output.process_run.value = False    # ensures all processes stop on next run
+        output.done = True  # stop writing frames to queue
 
-        time.sleep(2)
     while(True):
-        # print_l(output.print_lock,f'queue: {output.unprocessed_frames.qsize()}')
-        try:
-            output.unprocessed_frames.get_nowait()
-        except queue.Empty:
-            camera.close()
-            # time.sleep(2)
-            # camera.stop_recording()
+        dead_count = 0
+        for process in output.processes:
+            if process.is_alive() is False:
+                dead_count+=1
+        if dead_count == output.number_of_processors:
             break
+
+    print('closing')
+    camera.close()
 # import io
 # import time
 # import threading
