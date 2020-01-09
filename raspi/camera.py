@@ -1,100 +1,129 @@
+import os
 import io
 import time
-import threading
+import multiprocessing as mp
+from queue import Empty
 import picamera
-import picamera.array
-import numpy as np
-import matplotlib.pyplot as plt
 from PIL import Image
-import multiprocessing
-import queue
-import cv2
-import os
-import ctypes
 
-def print_l(print_lock, message):
-    print_lock.acquire()
-    try: 
-        print(message)
-    finally:
-        print_lock.release()
+class QueueOutput(object):
+    def __init__(self, queue, finished):
+        self.queue = queue
+        self.finished = finished
+        self.stream = io.BytesIO()
+        self.count = 0
 
-def ImageProcessor(unprocessed_frames, print_lock, process_run):
-    # stream = io.BytesIO()
-    # self.event = multiprocessing.Event()
-
-    while process_run:
-        try:
-            # attempts to get a new frame, raises exception if none available
-            pass
-            # print(unprocessed_frames.qsize())
-
-            # frame_num, frame = unprocessed_frames.get_nowait()
-            # print_lock.acquire()
-            # print(unprocessed_frames.qsize())
-            # print_lock.release()
-            # stream.write(frame)
-            # stream.seek(0)
-            # # Read the image and do some processing on it
-
-            # im = Image.open(stream) # read image from stream
-            # img = np.array(im) # convert image to numpy array
-
-            # # print_l(print_lock,img)
-            # print_lock.acquire()
-            # cv2.imwrite(f'{frame_num:03d}.png',frame)
-            # # cv2.imwrite(f'{frame_num:03.3f}.png',img)
-            # print_lock.release()
-            # # Reset the stream
-            # stream.seek(0)
-            # stream.truncate()
-
-        except queue.Empty:
-            if process_run.value is False:
-                break
-            continue
-    return
-
-class MyAnalysisClass(picamera.array.PiRGBAnalysis):
-    def __init__(self, camera):
-        super(MyAnalysisClass, self).__init__(camera)
-        self.number_of_processors = 4
-        self.unprocessed_frames = multiprocessing.Queue()
-        self.processes = []
-        self.print_lock = multiprocessing.Lock()
-        self.frame_num = 0
-        self.start = time.time()
-        self.done = False
-        self.process_run = multiprocessing.Value(ctypes.c_bool,True)
-
-        for i in range(self.number_of_processors):
-            processor = multiprocessing.Process(target=ImageProcessor, args=(self.unprocessed_frames, self.print_lock, self.process_run))
-            self.processes.append(processor)
-            processor.start()
-
-    def analyze(self, array):
-        # print(time.time()-self.start)
-        # self.start = time.time()
-        if self.done is False:
-            # print(self.frame_num)
-            # self.unprocessed_frames.put((self.frame_num, array)) # add the new frame to the buffer
-            # self.print_lock.acquire()
-            # self.unprocessed_frames.put(self.frame_num) # add the new frame to the buffer
-            # self.print_lock.release()
-            # self.unprocessed_frames.put((time.time(), buf)) # add the new frame to the buffer
-            self.frame_num += 1
-            # print (time.time()-start)
-            print(self.frame_num)
+    def write(self, buf):
+        if buf.startswith(b'\xff\xd8'):
+            print(self.count)
+            self.count += 1
+            # New frame, put the last frame's data in the queue
+            size = self.stream.tell()
+            if size:
+                self.stream.seek(0)
+                self.queue.put(self.stream.read(size))
+                self.stream.seek(0)
+        self.stream.write(buf)
 
     def flush(self):
-        print('closing camera')
-        # print('flushing')
-        # When told to flush (this indicates end of recording), shut
-        # down in an orderly fashion.
-        for p in self.processes:
-            p.terminate()
-            p.join()
+        self.queue.close()
+        self.queue.join_thread()
+        self.finished.set()
 
+def do_capture(queue, finished):
+    with picamera.PiCamera(resolution='VGA', framerate=90) as camera:
+        output = QueueOutput(queue, finished)
+        camera.start_recording(output, format='mjpeg')
+        camera.wait_recording(1)
+        camera.stop_recording()
+
+def do_processing(queue, finished):
+    while not finished.wait(0.1):
+        try: 
+            stream = io.BytesIO(queue.get(False))
+        except Empty:
+            pass
+        else:
+            stream.seek(0)
+            image = Image.open(stream)
+            # Pretend it takes 0.1 seconds to process the frame; on a quad-core
+            # Pi this gives a maximum processing throughput of 40fps
+            for i in range(10000000):
+                a = i*i
+            # print('%d: Processing image with size %dx%d' % (
+            #     os.getpid(), image.size[0], image.size[1]))
+
+if __name__ == '__main__':
+    queue = mp.Queue()
+    finished = mp.Event()
+    capture_proc = mp.Process(target=do_capture, args=(queue, finished))
+    processing_procs = [
+        mp.Process(target=do_processing, args=(queue, finished))
+        for i in range(4)
+        ]
+    for proc in processing_procs:
+        proc.start()
+    capture_proc.start()
+    for proc in processing_procs:
+        proc.join()
+    capture_proc.join()
+
+
+
+
+
+
+
+
+
+
+
+# import io
+# import time
+# import threading
+# import picamera
+# import numpy as np
+# import matplotlib.pyplot as plt
+# from PIL import Image
+# import multiprocessing
+# import queue
+# import cv2
+# import os
+# import ctypes
+
+# def print_l(print_lock, message):
+#     print_lock.acquire()
+#     try: 
+#         print(message)
+#     finally:
+#         print_lock.release()
+
+# def ImageProcessor(unprocessed_frames, print_lock, process_run):
+#     stream = io.BytesIO()
+#     # self.event = multiprocessing.Event()
+
+#     while process_run:
+#         try:
+#             # attempts to get a new frame, raises exception if none available
+            
+#             frame_num, frame = unprocessed_frames.get_nowait()
+#             stream.write(frame)
+#             stream.seek(0)
+#             # Read the image and do some processing on it
+
+#             # im = Image.open(stream) # read image from stream
+#             # img = np.array(im) # convert image to numpy array
+
+
+#             # Reset the stream
+#             stream.seek(0)
+#             stream.truncate()
+
+#         except queue.Empty:
+#             if process_run.value is False:
+#                 break
+#             continue
+#     return
 # class ProcessOutput(object):
 #     def __init__(self):
 #         self.number_of_processors = 4
@@ -112,49 +141,56 @@ class MyAnalysisClass(picamera.array.PiRGBAnalysis):
 #             processor.start()
 
 #     def write(self, buf):
+#         print(time.time()-self.start)
+#         self.start = time.time()
 #         if self.done is False:
-#             if buf.startswith(b'\xff\xd8'): # start of a new frame
-#                 # print(f'frame: {self.frame_num}')
-#                 self.unprocessed_frames.put((self.frame_num, buf)) # add the new frame to the buffer
-#                 # self.unprocessed_frames.put((time.time(), buf)) # add the new frame to the buffer
-#                 self.frame_num += 1
+#             # if buf.startswith(b'\xff\xd8'): # start of a new frame
+#             print(f'frame: {self.frame_num}')
+#             self.unprocessed_frames.put((self.frame_num, buf)) # add the new frame to the buffer
+#             #     # self.unprocessed_frames.put((time.time(), buf)) # add the new frame to the buffer
+#             self.frame_num += 1
+#             #     print(self.frame_num)
 
-#     def flush(self):
-#         print('closing camera')
-#         # print('flushing')
-#         # When told to flush (this indicates end of recording), shut
-#         # down in an orderly fashion.
+#     # def flush(self):
+#     #     print('closing camera')
+#     #     # print('flushing')
+#     #     # When told to flush (this indicates end of recording), shut
+#     #     # down in an orderly fashion.
 
-#         for p in self.processes:
-#             p.terminate()
-#             p.join()
+#     #     for p in self.processes:
+#     #         p.terminate()
+#     #         p.join()
 
-with picamera.PiCamera(resolution='1280x720',framerate=50) as camera:
-    with picamera.array.PiRGBAnalysis(camera) as output:
-        #camera.start_preview()
-        camera.vflip=True
-        camera.annotate_frame_num = True
-        camera.annotate_text_size = 160
-        camera.annotate_foreground = picamera.Color('green')
-        time.sleep(2)
-        output = MyAnalysisClass(camera)
-        camera.start_recording(output, format='bgr')
+# with picamera.PiCamera(resolution='VGA',framerate=90) as camera:
+#     #camera.start_preview()
+#     camera.vflip=True
+#     camera.annotate_frame_num = True
+#     camera.annotate_text_size = 160
+#     camera.annotate_foreground = picamera.Color('green')
+#     time.sleep(2)
+#     output = ProcessOutput()
+#     # camera.start_recording(output, format='mjpeg')
+#     counter = 0
+#     for frame in camera.capture_sequence(output,format='bgr',use_video_port=True):
+#         if counter>100:
+#             break
+#         counter+=1
 
-        try:   
-            camera.wait_recording(1)
-        finally:
-            output.process_run.value = False    # ensures all processes stop on next run
-            output.done = True  # stop writing frames to queue
+#     try:   
+#         camera.wait_recording(1)
+#     finally:
+#         output.process_run.value = False    # ensures all processes stop on next run
+#         output.done = True  # stop writing frames to queue
 
-        while(True):
-            dead_count = 0
-            for process in output.processes:
-                if process.is_alive() is False:
-                    dead_count+=1
-            if dead_count == output.number_of_processors:
-                break
+#     while(True):
+#         dead_count = 0
+#         for process in output.processes:
+#             if process.is_alive() is False:
+#                 dead_count+=1
+#         if dead_count == output.number_of_processors:
+#             break
 
-        camera.stop_recording()
+#     camera.stop_recording()
 
     # output = ProcessOutput()
     # camera.start_recording(output, format='mjpeg')
