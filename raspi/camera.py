@@ -5,6 +5,8 @@ import multiprocessing as mp
 from queue import Empty
 import picamera
 from PIL import Image
+import numpy as np
+import cv2
 
 class QueueOutput(object):
     def __init__(self, queue, finished):
@@ -15,13 +17,12 @@ class QueueOutput(object):
 
     def write(self, buf):
         if buf.startswith(b'\xff\xd8'):
-            print(self.count)
-            self.count += 1
             # New frame, put the last frame's data in the queue
             size = self.stream.tell()
             if size:
                 self.stream.seek(0)
-                self.queue.put(self.stream.read(size))
+                self.queue.put((self.stream.read(size), self.count))
+                self.count += 1
                 self.stream.seek(0)
         self.stream.write(buf)
 
@@ -33,23 +34,27 @@ class QueueOutput(object):
 def do_capture(queue, finished):
     with picamera.PiCamera(resolution='VGA', framerate=90) as camera:
         output = QueueOutput(queue, finished)
+        camera.vflip=True
+        camera.annotate_frame_num = True
+        camera.annotate_text_size = 160
+        camera.annotate_foreground = picamera.Color('green')
         camera.start_recording(output, format='mjpeg')
         camera.wait_recording(1)
         camera.stop_recording()
 
 def do_processing(queue, finished):
-    while not finished.wait(0.1):
+    while not finished.wait(0):
         try: 
-            stream = io.BytesIO(queue.get(False))
+            stream_b, count = queue.get(False)
+            stream = io.BytesIO(stream_b)
         except Empty:
             pass
         else:
             stream.seek(0)
             image = Image.open(stream)
+            img = np.array(image)
             # Pretend it takes 0.1 seconds to process the frame; on a quad-core
             # Pi this gives a maximum processing throughput of 40fps
-            for i in range(10000000):
-                a = i*i
             # print('%d: Processing image with size %dx%d' % (
             #     os.getpid(), image.size[0], image.size[1]))
 
