@@ -11,7 +11,7 @@ import cv2
 import os
 import ctypes
 
-w,h = (1280,720)
+# w,h = (1280,720)
 w,h = (640,480)
 resolution = w,h
 framerate = 90
@@ -61,6 +61,7 @@ class FrameController(object):
             self.unprocessed_frames.put((self.n_frame, buf))    # add the new frame to the queue
             self.n_frame += 1   # increment the frame number
         else:
+            # print(self.n_frame)
             self.n_frame = 0    # reset frame number when recording is finished
 
     def flush(self):
@@ -69,7 +70,8 @@ class FrameController(object):
             processor.terminate()
             processor.join()
 
-def StartPicam(unprocessed_frames, processed_frames, recording, proc_complete, shutdown):
+def StartPicam(unprocessed_frames, processed_frames, recording, shutdown, picam_ready, processing_complete):
+    proc_complete = []     # contains processing events, true if complete
     with picamera.PiCamera() as camera:
         camera.framerate = framerate
         camera.resolution = resolution
@@ -84,17 +86,24 @@ def StartPicam(unprocessed_frames, processed_frames, recording, proc_complete, s
         output = FrameController(unprocessed_frames, processed_frames, recording, proc_complete)
         camera.start_recording(output, format='yuv')
 
+        picam_ready.set()   # the picam is ready to record
+
+        # Picam will stay in this while loop waiting for either shutdown or recording flags to be set
         while True:
             if recording.wait(1):    # wait for recording flag to be set in main()
                 try:
                     camera.wait_recording(t_record) # record for an amount of time
                 finally:
                     recording.clear()   # clear the record flag to stop processing
+                    for proc in proc_complete:  # wait for all processing to be complete
+                        proc.wait()
+                    processing_complete.set()   # set processing complete event
+                    for proc in proc_complete:  # reset all processing complete events
+                        proc.clear()
             elif shutdown.is_set():
                 break
         camera.stop_recording()
-        # camera.close()
-    # return
+    return
 
 
 
@@ -106,33 +115,47 @@ if __name__ == "__main__":
     processed_frames = mp.Queue()
     recording = mp.Event()
     shutdown = mp.Event()
-    proc_complete = []     # contains processing events, true if complete
+    picam_ready = mp.Event()
+    processing_complete = mp.Event()
 
     ## -- initialise Picam process for recording
-    Picam = mp.Process(target=StartPicam, args=(unprocessed_frames, processed_frames, recording, proc_complete, shutdown))
+    Picam = mp.Process(target=StartPicam, args=(unprocessed_frames, processed_frames, recording, shutdown, picam_ready, processing_complete))
     Picam.start()
 
-    ## -- read server messages -- ##
+    while True:
+        ## -- read server messages -- ##
 
-    ## for testing
-    recording.set()
+        # listen for start recording command
+        ## for testing
+        #### ---- WHEN THE SERVER SAYS TO RECORD ---- ####
+        picam_ready.wait()  # waits for the picam to initialise
+        # for proc_status in proc_complete:
+        #     proc_status.clear()
+        recording.set()
+        processing_complete.clear()
+        print('recording')
+        print(time.time())
+        #### ---------------------------------------- ####
+        print(processing_complete.is_set())
+        ## -- send server messages -- ##
 
-    # listen for start recording command
+        ## for testing
 
-    ## -- send server messages -- ##
+        #### ---- WHEN THE SERVER SAYS TO SHUTDOWN ---- ####
+        # for proc_status in proc_complete:
+        #     proc_status.wait()  # waits for all processes to be complete
 
-    ## for testing
-    for proc_status in proc_complete:
-        proc_status.wait()  # waits for all processes to be complete
+        time.sleep(5)
+        # print(proc_complete)
+        print(recording.is_set())
+        print(processing_complete.is_set())
+        # shutdown.set()
+        # while Picam.is_alive():
+        #     time.sleep(0.1)
+        # Picam.join()
+        #### ------------------------------------------ ####
 
-    shutdown.set()
-    while Picam.is_alive():
-        time.sleep(0.1)
-    Picam.join()
-
-    print('finished')
-
-    # loop through processed frames and send data to server
+        # loop through processed frames and send data to server
 
 
 #####################################################################################
