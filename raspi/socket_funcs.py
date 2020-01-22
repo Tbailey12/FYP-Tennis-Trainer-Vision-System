@@ -8,6 +8,11 @@ import consts as c
 
 debug = c.DEBUG
 
+class MyMessage(object):
+    def __init__(self, my_type, message):
+        self.type = my_type
+        self.message = message
+
 
 def print_debug(my_print):
     if debug:

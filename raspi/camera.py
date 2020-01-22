@@ -11,8 +11,9 @@ import cv2
 import os
 # import ctypes
 
+import client
 
-
+## -- camera settings -- ##
 # w,h = (1280,720)
 w,h = (640,480)
 resolution = w,h
@@ -112,6 +113,7 @@ def StartPicam(unprocessed_frames, processed_frames, recording, shutdown, picam_
 
 if __name__ == "__main__":
     ## -- setup client connection to server -- ##
+    client.connect_to_server()
 
     ## -- initialise multithreading objs -- ##
     unprocessed_frames = mp.Queue()
@@ -127,7 +129,9 @@ if __name__ == "__main__":
 
     while True:
         ## -- read server messages -- ##
-
+        message_list = client.read_all_server_messsages()
+        for message in message_list:
+            
         # listen for start recording command
         ## for testing
         #### ---- WHEN THE SERVER SAYS TO RECORD ---- ####

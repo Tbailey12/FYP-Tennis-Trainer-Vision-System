@@ -69,9 +69,14 @@ if __name__ == "__main__":
 
         message_list = read_all_server_messages()
         for message in message_list:
-            if isinstance(message['data'], str):
-                print(f"{message['data']}")
-            elif isinstance(message['data'], int):
-                print(message['data'] * 5)
+            try:
+                if message['data'].type == c.TYPE_REC:
+                    print('record')
+                    print(message['data'].message)
+                elif message['data'].type == c.TYPE_CAP:
+                    print('capture')
+                    print(message['data'].message)
+            except:
+                print('unrecognised message format')
 
         counter += 1

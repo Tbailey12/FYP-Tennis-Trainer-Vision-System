@@ -14,3 +14,9 @@ PORT = 1234
 
 TYPE_STR = "text"
 TYPE_VAR = "var"
+
+TYPE_REC = "record"
+TYPE_CAP = "capture"
+TYPE_IMG = "img"
+TYPE_BALLS = "balls"
+TYPE_DONE = "done"

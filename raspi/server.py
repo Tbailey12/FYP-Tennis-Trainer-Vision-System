@@ -89,10 +89,14 @@ if __name__ == "__main__":
     while True:
         time.sleep(1 / 30)
 
+        rec_obj = sf.MyMessage(c.TYPE_REC, "this is a recording")
+        cap_obj = sf.MyMessage(c.TYPE_CAP, "this is a capture")
+
         # ---- send a message to the client ---- #
         if counter % 60 == 0:
             send_to_client(c.RIGHT_CLIENT, f"{counter} Time:{datetime.now()}")
-            send_to_client(c.LEFT_CLIENT, f"{counter} Time:{datetime.now()}")
+            send_to_client(c.LEFT_CLIENT, rec_obj)
+            send_to_client(c.LEFT_CLIENT, cap_obj)
 
         # ---- read all messages from clients ---- #
         message_list.extend(read_all_client_messages())
