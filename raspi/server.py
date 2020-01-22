@@ -1,0 +1,104 @@
+'''
+socket tutorial (SentDex) https://www.youtube.com/watch?v=ytu2yV3Gn1I
+'''
+
+import socket
+import select
+import time
+import sys
+from datetime import datetime
+
+import consts as c
+import socket_funcs as sf
+
+debug = c.DEBUG
+
+
+def print_debug(my_print):
+    if debug:
+        print(my_print)
+
+
+def send_to_client(client_name, message):
+    for client_socket in sockets_list:
+        if client_socket != server_socket:  # if the socket is not the server socket
+            # send left message
+            if clients[client_socket]['data'] == client_name:
+                print_debug(f"Sending message to {client_name} client: Time: {message}")
+                sf.send_message(client_socket, message, c.SERVER)
+
+
+def read_all_client_messages():
+    message_list = []
+    # syntax for select.select()
+    # (sockets we read, sockets we write, sockets that error)
+    read_sockets, _, exception_sockets = select.select(sockets_list, [], sockets_list, 0)
+    # read all messages from clients
+    while read_sockets:
+        # if any of the read_sockets have new data
+        for notified_socket in read_sockets:
+            # new client connected
+            if notified_socket == server_socket:  # client has connected, so accept and handle connection
+                client_socket, client_address = server_socket.accept()
+
+                client = sf.receive_message(client_socket, c.SERVER)
+                if client is None:  # client disconnected while sending
+                    continue
+                sockets_list.append(client_socket)  # append new socket to list of client sockets
+                clients[client_socket] = client
+                print(
+                    f"Accepted new connection from {client_address[0]}:{client_address[1]}, client:{client['data']}")
+            # existing client connected
+            else:
+                message = sf.receive_message(notified_socket, c.SERVER)
+
+                if message is None:
+                    print(f"Closed connection from {clients[notified_socket]['data']}")
+                    sockets_list.remove(notified_socket)
+                    del clients[notified_socket]
+                    continue
+
+                client = clients[notified_socket]
+                print_debug(f"Received message from {client['data']}: {message['data']}")
+                message_list.append({"client": client['data'], "data": message['data']})
+
+        # if there is an exception, remove the socket from the list
+        for notified_socket in exception_sockets:
+            sockets_list.remove(notified_socket)
+            del clients[notified_socket]
+
+        # if there are more messages to be read, read them
+        read_sockets, _, exception_sockets = select.select(sockets_list, [], sockets_list, 0)
+    return message_list
+
+
+server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)  # create IPV4 socket for server
+server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)  # allows us to reconnect to same port
+
+server_socket.bind((c.IP, c.PORT))
+server_socket.listen()
+
+print("Server started")
+
+sockets_list = [server_socket]  # list of sockets, init with server socket
+clients = {}  # list of clients
+
+if __name__ == "__main__":
+    message_list = []
+    counter = 0
+    while True:
+        time.sleep(1 / 30)
+
+        # ---- send a message to the client ---- #
+        if counter % 60 == 0:
+            send_to_client(c.RIGHT_CLIENT, f"{counter} Time:{datetime.now()}")
+            send_to_client(c.LEFT_CLIENT, f"{counter} Time:{datetime.now()}")
+
+        # ---- read all messages from clients ---- #
+        message_list.extend(read_all_client_messages())
+
+        if len(message_list) >= 100:
+            print(message_list[-1])
+            del (message_list[:])
+
+        counter += 1
