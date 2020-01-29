@@ -85,24 +85,54 @@ clients = {}  # list of clients
 
 if __name__ == "__main__":
     message_list = []
-    counter = 0
+
+    state = c.STATE_STOP
+    last_len = 0
     while True:
-        time.sleep(1 / 30)
-
-        rec_obj = sf.MyMessage(c.TYPE_REC, "this is a recording")
-        cap_obj = sf.MyMessage(c.TYPE_CAP, "this is a capture")
-
-        # ---- send a message to the client ---- #
-        if counter % 60 == 0:
-            send_to_client(c.RIGHT_CLIENT, f"{counter} Time:{datetime.now()}")
+        time.sleep(0.1)
+        if state == c.STATE_IDLE:
+            rec_obj = sf.MyMessage(c.TYPE_REC, 1)
+            print('starting recording')
+            state = c.STATE_RECORDING
             send_to_client(c.LEFT_CLIENT, rec_obj)
-            send_to_client(c.LEFT_CLIENT, cap_obj)
+            continue
+        
+        elif state == c.STATE_RECORDING:
+            message_list.extend(read_all_client_messages())
+            while last_len < len(message_list):
+                print(message_list[last_len]['data'].message)
+                last_len+=1
+            last_len = len(message_list)
+            if len(message_list) > 0:
+                if(message_list[-1]['data'].type == c.TYPE_DONE):
+                    print(message_list[-1]['data'].message)
+                    state = c.STATE_SHUTDOWN
+                    continue
+
+        elif state == c.STATE_STOP:
+            message_list.extend(read_all_client_messages())
+            for socket in sockets_list:
+                for client_socket in sockets_list:
+                    if client_socket != server_socket:  # if the socket is not the server socket
+                        if clients[client_socket]['data'] == c.LEFT_CLIENT:
+                            state = c.STATE_IDLE
+                            del message_list[:]
+
+        elif state == c.STATE_SHUTDOWN:
+            print('shutting down')
+            while True:
+                time.sleep(0.1)
+        # ---- send a message to the client ---- #
+        # if counter % 60 == 0:
+        #     send_to_client(c.RIGHT_CLIENT, f"{counter} Time:{datetime.now()}")
+        #     send_to_client(c.LEFT_CLIENT, rec_obj)
+        #     send_to_client(c.LEFT_CLIENT, cap_obj)
 
         # ---- read all messages from clients ---- #
-        message_list.extend(read_all_client_messages())
+        # message_list.extend(read_all_client_messages())
 
-        if len(message_list) >= 100:
-            print(message_list[-1])
-            del (message_list[:])
+        # if len(message_list) >= 100:
+        #     print(message_list[-1])
+        #     del (message_list[:])
 
-        counter += 1
+        # counter += 1

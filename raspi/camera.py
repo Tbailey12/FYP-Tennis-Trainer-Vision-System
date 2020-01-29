@@ -9,17 +9,18 @@ import multiprocessing as mp
 import queue
 import cv2
 import os
-# import ctypes
 
 import client
+import consts as c
+import socket_funcs as sf
 
 ## -- camera settings -- ##
 # w,h = (1280,720)
 w,h = (640,480)
 resolution = w,h
 framerate = 90
-t_record = 1    # seconds to record
 n_processors = 4    # number of processors to use for CV
+T_RECORD_DEF = 1    # default recording time
 
 def ImageProcessor(unprocessed_frames, processed_frames, recording, proc_complete):
     processing = False
@@ -34,7 +35,11 @@ def ImageProcessor(unprocessed_frames, processed_frames, recording, proc_complet
                 n_frame, frame_buf = unprocessed_frames.get_nowait()
                 # y_data is a numpy array hxw with 8 bit greyscale brightness values
                 y_data = np.frombuffer(frame_buf, dtype=np.uint8, count=w*h).reshape((h,w))
-                # do some processing
+                
+                ## -- do some processing -- ##
+                y_data_out = y_data
+                ##--------------------------##
+                processed_frames.put((n_frame, y_data_out))
 
             except queue.Empty:
                 if not recording.is_set():  # if the recording has finished
@@ -73,7 +78,7 @@ class FrameController(object):
             processor.join()
         print('shutdown complete')
 
-def StartPicam(unprocessed_frames, processed_frames, recording, shutdown, picam_ready, processing_complete):
+def StartPicam(unprocessed_frames, processed_frames, recording, shutdown, picam_ready, processing_complete, t_record):
     proc_complete = []     # contains processing events, true if complete
     with picamera.PiCamera() as camera:
         camera.framerate = framerate
@@ -97,7 +102,7 @@ def StartPicam(unprocessed_frames, processed_frames, recording, shutdown, picam_
                 try:
                     for proc in proc_complete:  # reset all processing complete events
                         proc.clear()
-                    camera.wait_recording(t_record) # record for an amount of time
+                    camera.wait_recording(t_record.value) # record for an amount of time
                 finally:
                     recording.clear()   # clear the record flag to stop processing
                     for proc in proc_complete:  # wait for all processing to be complete
@@ -110,7 +115,6 @@ def StartPicam(unprocessed_frames, processed_frames, recording, shutdown, picam_
         print('not recording') 
     return
 
-
 if __name__ == "__main__":
     ## -- setup client connection to server -- ##
     client.connect_to_server()
@@ -122,42 +126,61 @@ if __name__ == "__main__":
     shutdown = mp.Event()
     picam_ready = mp.Event()
     processing_complete = mp.Event()
+    t_record = mp.Value('i',T_RECORD_DEF)
+
+    state = c.STATE_IDLE    # sets the default state
 
     ## -- initialise Picam process for recording
-    Picam = mp.Process(target=StartPicam, args=(unprocessed_frames, processed_frames, recording, shutdown, picam_ready, processing_complete))
+    Picam = mp.Process(target=StartPicam, args=(unprocessed_frames, processed_frames, recording, shutdown, picam_ready, processing_complete, t_record))
     Picam.start()
 
     while True:
-        ## -- read server messages -- ##
-        message_list = client.read_all_server_messsages()
-        for message in message_list:
-            
-        # listen for start recording command
-        ## for testing
-        #### ---- WHEN THE SERVER SAYS TO RECORD ---- ####
-        picam_ready.wait()  # waits for the picam to initialise
-        # for proc_status in proc_complete:
-        #     proc_status.clear()
-        recording.set()
-        processing_complete.clear()
-        print('recording')
-        print(time.time())
-        #### ---------------------------------------- ####
-        ## -- send server messages -- ##
+        if state == c.STATE_IDLE:
+            ## -- read server messages -- ##
+            message_list = client.read_all_server_messages()
+            for message in message_list:
+                try:
+                    print(message['data'])
+                    print(message['data'].type)
+                    print(message['data'].message)
+                    # record message
+                    if message['data'].type == c.TYPE_REC:
+                        state = c.STATE_RECORDING
+                        # change the recording time if the new recording time is valid
+                        if isinstance(message['data'].message, int):
+                            t_record.value = message['data'].message
+                        else:
+                            t_record.value = T_RECORD_DEF
+                        break   # go and do the recording, ignore other messages 
+                except:
+                    print('unrecognised message type')
+                    continue
+        elif state == c.STATE_RECORDING:
+            picam_ready.wait()  # waits for the picam to initialise
+            processing_complete.clear()
+            recording.set()
 
-        ## for testing
+            errors = 0
+            while True: # wait here until all frames have been processed and sent to server
+                try: 
+                    # get the processed frames from queue
+                    frame_n, y_data = processed_frames.get_nowait()
+                    print(frame_n)
+                    message = sf.MyMessage(c.TYPE_BALLS, frame_n)
+                    if not sf.send_message(client.client_socket, message, c.CLIENT):
+                        errors += 1
+                
+                # if processing complete and no more data to send to server
+                except queue.Empty:
+                    if processing_complete.is_set():
+                        break
+            # if there were no transmission errors send True, else send False
+            if errors == 0:
+                message = sf.MyMessage(c.TYPE_DONE, True)
+            else:
+                message = sf.MyMessage(c.TYPE_DONE, False)
+            sf.send_message(client.client_socket, message, c.CLIENT)
+            print(message.message)
 
-        #### ---- WHEN THE SERVER SAYS TO SHUTDOWN ---- ####
-        # for proc_status in proc_complete:
-        #     proc_status.wait()  # waits for all processes to be complete
-        # print(proc_complete)
-        processing_complete.wait()
-        print('processing complete')
-
-        shutdown.set()
-        while Picam.is_alive():
-            time.sleep(0.1)
-        Picam.join()
-        #### ------------------------------------------ ####
-
-        # loop through processed frames and send data to server
+            state = c.STATE_IDLE    # reset the state to IDLE and wait for next instruction
+            continue
