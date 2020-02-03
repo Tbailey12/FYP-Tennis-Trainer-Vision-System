@@ -8,7 +8,7 @@ RIGHT_CLIENT = 'right'
 
 SOCKET_TIMEOUT = 5
 HEADER_LENGTH = 24
-IP = "192.168.20.8"		# server IP address
+IP = "192.168.20.12"		# server IP address
 # IP = "127.0.0.1"
 PORT = 1234
 

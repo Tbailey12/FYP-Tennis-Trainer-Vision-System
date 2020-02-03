@@ -90,7 +90,6 @@ def receive_message(client_socket, caller):
 			bytes_received += len(chunk)
 		message_b = b''.join(chunks)
 		message = pickle.loads(message_b)
-		print(bytes_received)
 		return {"header": message_header, "data": message}
 
 	except IOError as e:

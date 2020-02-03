@@ -116,6 +116,8 @@ def StartPicam(unprocessed_frames, processed_frames, recording, shutdown, picam_
     return
 
 if __name__ == "__main__":
+    message_list = []
+
     ## -- setup client connection to server -- ##
     client.connect_to_server(name=c.LEFT_CLIENT) 
 
@@ -137,12 +139,9 @@ if __name__ == "__main__":
     while True:
         if state == c.STATE_IDLE:
             ## -- read server messages -- ##
-            message_list = client.read_all_server_messages()
+            message_list.extend(client.read_all_server_messages())
             for message in message_list:
                 try:
-                    print(message['data'])
-                    print(message['data'].type)
-                    print(message['data'].message)
                     # record message
                     if message['data'].type == c.TYPE_REC:
                         state = c.STATE_RECORDING
@@ -151,11 +150,13 @@ if __name__ == "__main__":
                             t_record.value = message['data'].message
                         else:
                             t_record.value = T_RECORD_DEF
+                        message_list = []
                         break   # go and do the recording, ignore other messages 
                 except:
                     print('unrecognised message type')
                     continue
         elif state == c.STATE_RECORDING:
+            print('recording')
             picam_ready.wait()  # waits for the picam to initialise
             processing_complete.clear()
             recording.set()
@@ -165,9 +166,8 @@ if __name__ == "__main__":
                 try: 
                     # get the processed frames from queue
                     frame_n, y_data = processed_frames.get_nowait()
-                    m = frame_n
+                    m = [(frame_n,i,i) for i in range(1000)]
                     message = sf.MyMessage(c.TYPE_BALLS, m)
-                    print('sending')
                     if not sf.send_message(client.client_socket, message, c.CLIENT):
                         errors += 1
                         print(f"error: {errors}")
@@ -182,7 +182,6 @@ if __name__ == "__main__":
             else:
                 message = sf.MyMessage(c.TYPE_DONE, False)
             sf.send_message(client.client_socket, message, c.CLIENT)
-            print(message.message)
 
             state = c.STATE_IDLE    # reset the state to IDLE and wait for next instruction
             continue
