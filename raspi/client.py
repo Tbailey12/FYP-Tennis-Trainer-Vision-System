@@ -10,15 +10,14 @@ import socket_funcs as sf
 
 debug = c.DEBUG
 
-name = c.LEFT_CLIENT
-
+# name = c.LEFT_CLIENT
 
 def print_debug(my_print):
     if debug:
-        print(my_print)
+        print(my_print) 
+ 
 
-
-def connect_to_server():
+def connect_to_server(name):
     # attempt to connect to the server, if connection refused, wait 1s then try again
     while True:
         try:
@@ -35,7 +34,7 @@ def connect_to_server():
             print('Error', str(e))
             sys.exit()
         print(f"Connection Established to server on {c.IP}:{c.PORT}")
-        client_socket.setblocking(False)
+        client_socket.setblocking(True)
         sf.send_message(client_socket, name, c.CLIENT)  # send name to server
         time.sleep(1)
         break

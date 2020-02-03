@@ -117,7 +117,7 @@ def StartPicam(unprocessed_frames, processed_frames, recording, shutdown, picam_
 
 if __name__ == "__main__":
     ## -- setup client connection to server -- ##
-    client.connect_to_server()
+    client.connect_to_server(name=c.LEFT_CLIENT) 
 
     ## -- initialise multithreading objs -- ##
     unprocessed_frames = mp.Queue()
@@ -165,10 +165,12 @@ if __name__ == "__main__":
                 try: 
                     # get the processed frames from queue
                     frame_n, y_data = processed_frames.get_nowait()
-                    print(frame_n)
-                    message = sf.MyMessage(c.TYPE_BALLS, frame_n)
+                    m = frame_n
+                    message = sf.MyMessage(c.TYPE_BALLS, m)
+                    print('sending')
                     if not sf.send_message(client.client_socket, message, c.CLIENT):
                         errors += 1
+                        print(f"error: {errors}")
                 
                 # if processing complete and no more data to send to server
                 except queue.Empty:

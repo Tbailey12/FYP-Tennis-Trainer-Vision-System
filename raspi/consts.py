@@ -6,14 +6,15 @@ CLIENT = 'client'
 LEFT_CLIENT = 'left'
 RIGHT_CLIENT = 'right'
 
-SOCKET_TIMEOUT = 10
+SOCKET_TIMEOUT = 5
 HEADER_LENGTH = 24
-IP = "192.168.20.12"		# server IP address
+IP = "192.168.20.8"		# server IP address
 # IP = "127.0.0.1"
 PORT = 1234
 
-## -- message type definitions -- ##
+CHUNK_SIZE = 4096 
 
+## -- message type definitions -- ##
 TYPE_STR = "text"
 TYPE_VAR = "var"
 
