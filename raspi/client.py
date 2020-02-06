@@ -53,14 +53,7 @@ def read_all_server_messages():
             message_list.append(message)
             return message_list    
     return message_list
-
-    # message_recv = sf.receive_message(client_socket, c.CLIENT)  # receive messages from the server
-    # while message_recv is not None:
-    #     message_list.append(message_recv)
-    #     message_recv = sf.receive_message(client_socket, c.CLIENT)  # receive messages from the server
-
-    # return message_list
-
+    
 
 client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)  # create IPV4 socket for
 client_socket.settimeout(c.SOCKET_TIMEOUT)

@@ -20,15 +20,17 @@ w,h = (640,480)
 resolution = w,h
 framerate = 90
 n_processors = 4    # number of processors to use for CV
-T_RECORD_DEF = 1    # default recording time
 
-def ImageProcessor(unprocessed_frames, processed_frames, recording, proc_complete):
+def ImageProcessor(unprocessed_frames, processed_frames, recording, proc_complete, calibration):
     processing = False
 
     while True:
         if not processing:
             recording.wait()    # wait for a recording to start
-            processing = True
+            if not calibration.is_set():
+                processing = True
+            else:
+                proc_complete.set()
         else:
             try:
                 # get the frames from queue
@@ -47,10 +49,11 @@ def ImageProcessor(unprocessed_frames, processed_frames, recording, proc_complet
                     proc_complete.set()     # set the proc_complete event
 
 class FrameController(object):
-    def __init__(self, unprocessed_frames, processed_frames, recording, proc_complete):
+    def __init__(self, unprocessed_frames, processed_frames, recording, proc_complete, calibration):
         self.unprocessed_frames = unprocessed_frames
         self.processed_frames = processed_frames
         self.recording = recording
+        self.calibration = calibration
         self.proc_complete = proc_complete
         self.number_of_processors = n_processors
         self.processors = []
@@ -59,14 +62,18 @@ class FrameController(object):
         ## -- create processors for processing the individual video frames
         for i in range(n_processors):
             proc_event = mp.Event()
-            processor = mp.Process(target=ImageProcessor, args=(self.unprocessed_frames,self.processed_frames,self.recording,proc_event))
+            processor = mp.Process(target=ImageProcessor, args=(self.unprocessed_frames,self.processed_frames,self.recording,proc_event,self.calibration))
             self.proc_complete.append(proc_event)
             self.processors.append(processor)
             processor.start()
 
     def write(self, buf):
-        if recording.is_set():
-            self.unprocessed_frames.put((self.n_frame, buf))    # add the new frame to the queue
+        if self.recording.is_set():
+            if self.calibration.is_set():
+                if self.n_frame%framerate == 0:
+                    self.processed_frames.put((self.n_frame, buf))
+            else:
+                self.unprocessed_frames.put((self.n_frame, buf))    # add the new frame to the queue
             self.n_frame += 1   # increment the frame number
         else:
             self.n_frame = 0    # reset frame number when recording is finished
@@ -78,7 +85,7 @@ class FrameController(object):
             processor.join()
         print('shutdown complete')
 
-def StartPicam(unprocessed_frames, processed_frames, recording, shutdown, picam_ready, processing_complete, t_record):
+def StartPicam(unprocessed_frames, processed_frames, recording, shutdown, picam_ready, processing_complete, t_record, calibration):
     proc_complete = []     # contains processing events, true if complete
     with picamera.PiCamera() as camera:
         camera.framerate = framerate
@@ -91,7 +98,7 @@ def StartPicam(unprocessed_frames, processed_frames, recording, shutdown, picam_
         ## ----------------------------------------------- ##
         time.sleep(2)   # give the camera a couple of seconds to initialise
 
-        output = FrameController(unprocessed_frames, processed_frames, recording, proc_complete)
+        output = FrameController(unprocessed_frames, processed_frames, recording, proc_complete, calibration)
         camera.start_recording(output, format='yuv')
 
         picam_ready.set()   # the picam is ready to record
@@ -109,10 +116,9 @@ def StartPicam(unprocessed_frames, processed_frames, recording, shutdown, picam_
                         proc.wait()
                     processing_complete.set()   # set processing complete event
             elif shutdown.is_set():
-                print('shutdown')
+                print('shutdown (picam)')
                 break
-        camera.stop_recording()
-        print('not recording') 
+        camera.stop_recording() 
     return
 
 if __name__ == "__main__":
@@ -125,18 +131,24 @@ if __name__ == "__main__":
     unprocessed_frames = mp.Queue()
     processed_frames = mp.Queue()
     recording = mp.Event()
+    calibration = mp.Event()
     shutdown = mp.Event()
     picam_ready = mp.Event()
     processing_complete = mp.Event()
-    t_record = mp.Value('i',T_RECORD_DEF)
+    t_record = mp.Value('i',c.REC_T)
 
     state = c.STATE_IDLE    # sets the default state
 
+    ##############################################################################
+    # state = c.STATE_CALIBRATION    # sets the default state
+    ##############################################################################
+
     ## -- initialise Picam process for recording
-    Picam = mp.Process(target=StartPicam, args=(unprocessed_frames, processed_frames, recording, shutdown, picam_ready, processing_complete, t_record))
+    Picam = mp.Process(target=StartPicam, args=(unprocessed_frames, processed_frames, recording, shutdown, picam_ready, processing_complete, t_record, calibration))
     Picam.start()
 
     while True:
+
         if state == c.STATE_IDLE:
             ## -- read server messages -- ##
             message_list.extend(client.read_all_server_messages())
@@ -149,12 +161,17 @@ if __name__ == "__main__":
                         if isinstance(message['data'].message, int):
                             t_record.value = message['data'].message
                         else:
-                            t_record.value = T_RECORD_DEF
+                            t_record.value = c.REC_T
                         message_list = []
-                        break   # go and do the recording, ignore other messages 
+                        break   # go and do the recording, ignore other messages
+                    elif message['data'].type == c.TYPE_SHUTDOWN:
+                        state = c.STATE_SHUTDOWN
+                        break
                 except:
                     print('unrecognised message type')
                     continue
+
+                    
         elif state == c.STATE_RECORDING:
             print('recording')
             picam_ready.wait()  # waits for the picam to initialise
@@ -185,3 +202,32 @@ if __name__ == "__main__":
 
             state = c.STATE_IDLE    # reset the state to IDLE and wait for next instruction
             continue
+
+        elif state == c.STATE_CALIBRATION:
+            print('calibrating')
+            picam_ready.wait()  # waits for the picam to initialise
+            time.sleep(2)   # wait for person to get ready with calib board
+            processing_complete.clear()
+            calibration.set()
+            recording.set()
+            t_record.value = c.CALIB_T
+
+            while True:
+                try:
+                    # get the frames from queue
+                    n_frame, frame_buf = processed_frames.get_nowait()
+                    # y_data is a numpy array hxw with 8 bit greyscale brightness values
+                    y_data = np.frombuffer(frame_buf, dtype=np.uint8, count=w*h).reshape((h,w))
+                    cv2.imwrite(f"{n_frame}.png", y_data)
+                except queue.Empty:
+                    if not recording.is_set():  # if the recording has finished
+                        break
+            t_record.value = c.REC_T
+            calibration.clear()
+
+            state = c.STATE_SHUTDOWN
+
+        elif state == c.STATE_SHUTDOWN:
+            print('shutdown (main)')
+            shutdown.set()
+            break

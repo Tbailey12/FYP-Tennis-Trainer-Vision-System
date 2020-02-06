@@ -92,6 +92,8 @@ if __name__ == "__main__":
     last_len = 0
     while True:
         time.sleep(1/1000)
+
+
         if state == c.STATE_IDLE:
             rec_obj = sf.MyMessage(c.TYPE_REC, 1)
             print('starting recording') 
@@ -99,6 +101,7 @@ if __name__ == "__main__":
             send_to_client(c.LEFT_CLIENT, rec_obj)
             continue
         
+
         elif state == c.STATE_RECORDING:
             message_list.extend(read_all_client_messages())
             while last_len < len(message_list):
@@ -114,6 +117,7 @@ if __name__ == "__main__":
                     state = c.STATE_SHUTDOWN
                     continue
 
+
         elif state == c.STATE_STOP:
             message_list.extend(read_all_client_messages())
             for socket in sockets_list:
@@ -123,6 +127,7 @@ if __name__ == "__main__":
                             state = c.STATE_IDLE
                             del message_list[:]
 
+
         elif state == c.STATE_SHUTDOWN:
             if j == 0:
                 time.sleep(1)
@@ -131,5 +136,8 @@ if __name__ == "__main__":
                 j+=1
                 continue
             print('shutting down')
+            shut_obj = sf.MyMessage(c.TYPE_SHUTDOWN, None)
+            send_to_client(c.LEFT_CLIENT, shut_obj)
             while True:
-                time.sleep(0.1)
+                time.sleep(1)
+                sys.exit()
