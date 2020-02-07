@@ -16,6 +16,14 @@ CHUNK_SIZE = 4096
 REC_T = 1			# default recording time
 CALIB_T = 2		# 10 seconds for calibration to take images
 
+## -- LED consts -- ##
+LED_F_MAX = 60		# max LED frequency
+LED_F_MIN = 0.5		# min LED frequency
+R_LED_F = 0			# default LED frequency
+G_LED_F = 0
+R_LED_PIN = 24		# red LED pin
+G_LED_PIN = 23		# green LED pin
+
 ## -- message type definitions -- ##
 TYPE_STR = "text"
 TYPE_VAR = "var"

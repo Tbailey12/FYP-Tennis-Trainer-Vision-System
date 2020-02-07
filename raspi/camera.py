@@ -14,6 +14,8 @@ import client
 import consts as c
 import socket_funcs as sf
 
+import RPi.GPIO as GPIO
+
 ## -- camera settings -- ##
 # w,h = (1280,720)
 w,h = (640,480)
@@ -23,14 +25,14 @@ n_processors = 4    # number of processors to use for CV
 
 def ImageProcessor(unprocessed_frames, processed_frames, recording, proc_complete, calibration):
     processing = False
+    proc_complete.set()
 
     while True:
         if not processing:
             recording.wait()    # wait for a recording to start
             if not calibration.is_set():
                 processing = True
-            else:
-                proc_complete.set()
+                proc_complete.clear()
         else:
             try:
                 # get the frames from queue
@@ -85,6 +87,7 @@ class FrameController(object):
             processor.join()
         print('shutdown complete')
 
+
 def StartPicam(unprocessed_frames, processed_frames, recording, shutdown, picam_ready, processing_complete, t_record, calibration):
     proc_complete = []     # contains processing events, true if complete
     with picamera.PiCamera() as camera:
@@ -118,7 +121,29 @@ def StartPicam(unprocessed_frames, processed_frames, recording, shutdown, picam_
             elif shutdown.is_set():
                 print('shutdown (picam)')
                 break
-        camera.stop_recording() 
+        camera.stop_recording()
+    return
+
+def LED(led_pin, led_freq, shutdown):
+    GPIO.setmode(GPIO.BCM)
+    GPIO.setwarnings(False)
+    GPIO.setup(led_pin, GPIO.OUT)
+    while True:
+        if shutdown.is_set():
+            GPIO.cleanup()
+            break
+        t = 0
+        if (led_freq.value >= c.LED_F_MIN) and (led_freq.value <= c.LED_F_MAX):
+            t = abs(1/led_freq.value)
+
+            GPIO.output(led_pin, GPIO.HIGH)
+            time.sleep(t)
+            GPIO.output(led_pin, GPIO.LOW)
+            time.sleep(t)
+        else:
+            GPIO.output(led_pin, GPIO.LOW)
+            time.sleep(1)
+    print("shutdown (LEDs)")
     return
 
 if __name__ == "__main__":
@@ -137,11 +162,21 @@ if __name__ == "__main__":
     processing_complete = mp.Event()
     t_record = mp.Value('i',c.REC_T)
 
+    r_led_f = mp.Value('d', c.R_LED_F)
+    g_led_f = mp.Value('d', c.G_LED_F)
+
     state = c.STATE_IDLE    # sets the default state
 
     ##############################################################################
     # state = c.STATE_CALIBRATION    # sets the default state
     ##############################################################################
+
+    ## -- initialise GPIO processes for LEDs -- ##
+    r_led = mp.Process(target=LED, args=(c.R_LED_PIN, r_led_f, shutdown))
+    r_led.start()
+    g_led = mp.Process(target=LED, args=(c.G_LED_PIN, g_led_f, shutdown))
+    g_led.start()
+
 
     ## -- initialise Picam process for recording
     Picam = mp.Process(target=StartPicam, args=(unprocessed_frames, processed_frames, recording, shutdown, picam_ready, processing_complete, t_record, calibration))
@@ -150,6 +185,7 @@ if __name__ == "__main__":
     while True:
 
         if state == c.STATE_IDLE:
+            state = c.STATE_SHUTDOWN
             ## -- read server messages -- ##
             message_list.extend(client.read_all_server_messages())
             for message in message_list:

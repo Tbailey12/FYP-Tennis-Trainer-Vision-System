@@ -96,9 +96,10 @@ if __name__ == "__main__":
 
         if state == c.STATE_IDLE:
             rec_obj = sf.MyMessage(c.TYPE_REC, 1)
-            print('starting recording') 
-            state = c.STATE_RECORDING
-            send_to_client(c.LEFT_CLIENT, rec_obj)
+            print('starting recording')
+            time.sleep(2)
+            # state = c.STATE_RECORDING
+            # send_to_client(c.LEFT_CLIENT, rec_obj)
             continue
         
 
