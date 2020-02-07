@@ -33,6 +33,8 @@ def ImageProcessor(unprocessed_frames, processed_frames, recording, proc_complet
             if not calibration.is_set():
                 processing = True
                 proc_complete.clear()
+            else:
+                proc_complete.set()
         else:
             try:
                 # get the frames from queue
@@ -134,16 +136,18 @@ def LED(led_pin, led_freq, shutdown):
             break
         t = 0
         if (led_freq.value >= c.LED_F_MIN) and (led_freq.value <= c.LED_F_MAX):
-            t = abs(1/led_freq.value)
+            t = abs(1/2*led_freq.value)
 
             GPIO.output(led_pin, GPIO.HIGH)
             time.sleep(t)
             GPIO.output(led_pin, GPIO.LOW)
             time.sleep(t)
+        elif led_freq.value > c.LED_F_MAX:
+            GPIO.output(led_pin, GPIO.HIGH)
+            time.sleep(1)
         else:
             GPIO.output(led_pin, GPIO.LOW)
             time.sleep(1)
-    print("shutdown (LEDs)")
     return
 
 if __name__ == "__main__":
@@ -185,7 +189,8 @@ if __name__ == "__main__":
     while True:
 
         if state == c.STATE_IDLE:
-            state = c.STATE_SHUTDOWN
+            r_led_f.value = 0
+            g_led_f.value = 1
             ## -- read server messages -- ##
             message_list.extend(client.read_all_server_messages())
             for message in message_list:
@@ -200,6 +205,10 @@ if __name__ == "__main__":
                             t_record.value = c.REC_T
                         message_list = []
                         break   # go and do the recording, ignore other messages
+                    elif message['data'].type == c.TYPE_CALIB:
+                        message_list = []
+                        state = c.STATE_CALIBRATION
+                        break
                     elif message['data'].type == c.TYPE_SHUTDOWN:
                         state = c.STATE_SHUTDOWN
                         break
@@ -210,6 +219,8 @@ if __name__ == "__main__":
                     
         elif state == c.STATE_RECORDING:
             print('recording')
+            g_led_f.value = 100
+            r_led_f.value = 1
             picam_ready.wait()  # waits for the picam to initialise
             processing_complete.clear()
             recording.set()
@@ -242,7 +253,9 @@ if __name__ == "__main__":
         elif state == c.STATE_CALIBRATION:
             print('calibrating')
             picam_ready.wait()  # waits for the picam to initialise
+            g_led_f.value = 1
             time.sleep(2)   # wait for person to get ready with calib board
+            r_led_f.value = 1
             processing_complete.clear()
             calibration.set()
             recording.set()
@@ -261,9 +274,18 @@ if __name__ == "__main__":
             t_record.value = c.REC_T
             calibration.clear()
 
-            state = c.STATE_SHUTDOWN
+            errors = 0
+            if errors == 0:
+                message = sf.MyMessage(c.TYPE_DONE, True)
+            else:
+                message = sf.MyMessage(c.TYPE_DONE, False)
+            sf.send_message(client.client_socket, message, c.CLIENT)
+
+            state = c.STATE_IDLE
 
         elif state == c.STATE_SHUTDOWN:
+            r_led_f.value = 10
+            g_led_f.value = 0
             print('shutdown (main)')
             shutdown.set()
             break

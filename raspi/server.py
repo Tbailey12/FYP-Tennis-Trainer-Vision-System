@@ -93,13 +93,21 @@ if __name__ == "__main__":
     while True:
         time.sleep(1/1000)
 
-
         if state == c.STATE_IDLE:
+            if j == 1:
+                time.sleep(3)
+                del message_list[:]
+                rec_obj = sf.MyMessage(c.TYPE_CALIB, 1)
+                print('starting calibration')
+                state = c.STATE_CALIBRATION
+                send_to_client(c.LEFT_CLIENT, rec_obj)
+                continue
+
             rec_obj = sf.MyMessage(c.TYPE_REC, 1)
             print('starting recording')
-            time.sleep(2)
-            # state = c.STATE_RECORDING
-            # send_to_client(c.LEFT_CLIENT, rec_obj)
+            state = c.STATE_RECORDING
+            j+=1
+            send_to_client(c.LEFT_CLIENT, rec_obj)
             continue
         
 
@@ -115,9 +123,16 @@ if __name__ == "__main__":
             if len(message_list) > 0:
                 if(message_list[-1]['data'].type == c.TYPE_DONE):
                     print(message_list[-1]['data'].message)
-                    state = c.STATE_SHUTDOWN
+                    state = c.STATE_IDLE
                     continue
 
+        elif state == c.STATE_CALIBRATION:
+            message_list.extend(read_all_client_messages())
+            if len(message_list) > 0:
+                if(message_list[-1]['data'].type == c.TYPE_DONE):
+                    print(message_list[-1]['data'].message)
+                    state = c.STATE_SHUTDOWN
+                    continue
 
         elif state == c.STATE_STOP:
             message_list.extend(read_all_client_messages())
@@ -130,12 +145,6 @@ if __name__ == "__main__":
 
 
         elif state == c.STATE_SHUTDOWN:
-            if j == 0:
-                time.sleep(1)
-                state = c.STATE_IDLE
-                del message_list[:]
-                j+=1
-                continue
             print('shutting down')
             shut_obj = sf.MyMessage(c.TYPE_SHUTDOWN, None)
             send_to_client(c.LEFT_CLIENT, shut_obj)
