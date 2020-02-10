@@ -14,7 +14,7 @@ PORT = 1234
 
 CHUNK_SIZE = 4096
 REC_T = 1			# default recording time
-CALIB_T = 5		# 10 seconds for calibration to take images
+CALIB_T = 10		# 10 seconds for calibration to take images
 
 ## -- LED consts -- ##
 LED_F_MAX = 60		# max LED frequency

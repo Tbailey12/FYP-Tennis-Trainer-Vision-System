@@ -97,7 +97,7 @@ def StartPicam(unprocessed_frames, processed_frames, recording, shutdown, picam_
         camera.resolution = resolution
         camera.vflip = True # camera is upside down so flip the image
         ## -- adds the frame number to the image for testing
-        camera.annotate_frame_num = True
+        # camera.annotate_frame_num = True
         camera.annotate_text_size = 160
         camera.annotate_foreground = picamera.Color('green')
         ## ----------------------------------------------- ##

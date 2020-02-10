@@ -90,26 +90,16 @@ if __name__ == "__main__":
 
     state = c.STATE_STOP
     last_len = 0
+    
     while True:
         time.sleep(1/1000)
 
         if state == c.STATE_IDLE:
-            if j == 1:
-                time.sleep(3)
-                del message_list[:]
-                rec_obj = sf.MyMessage(c.TYPE_CALIB, 1)
-                print('starting calibration')
-                state = c.STATE_CALIBRATION
-                send_to_client(c.LEFT_CLIENT, rec_obj)
-                continue
-
-            rec_obj = sf.MyMessage(c.TYPE_REC, 1)
-            print('starting recording')
-            state = c.STATE_RECORDING
-            j+=1
+            rec_obj = sf.MyMessage(c.TYPE_CALIB, 1)
+            print('starting calibration')
+            state = c.STATE_CALIBRATION
             send_to_client(c.LEFT_CLIENT, rec_obj)
             continue
-        
 
         elif state == c.STATE_RECORDING:
             message_list.extend(read_all_client_messages())
