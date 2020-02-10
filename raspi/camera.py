@@ -171,10 +171,6 @@ if __name__ == "__main__":
 
     state = c.STATE_IDLE    # sets the default state
 
-    ##############################################################################
-    # state = c.STATE_CALIBRATION    # sets the default state
-    ##############################################################################
-
     ## -- initialise GPIO processes for LEDs -- ##
     r_led = mp.Process(target=LED, args=(c.R_LED_PIN, r_led_f, shutdown))
     r_led.start()

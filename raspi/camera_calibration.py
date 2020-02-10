@@ -7,6 +7,23 @@ import os
 
 import matplotlib.pyplot as plt
 
+class CamCal(object):
+    def __init__(self, rms, camera_matrix, dist_coefs, rvecs, tvecs):
+        self.rms = rms
+        self.camera_matrix = camera_matrix
+        self.dist_coefs = dist_coefs
+        self.rvecs = rvecs
+        self.tvecs = tvecs
+
+def save_params(filename, rms, camera_matrix, dist_coefs, rvecs, tvecs):
+    with open(filename, 'wb') as f:
+        np.savez(f, rms=rms, camera_matrix=camera_matrix, dist_coefs=dist_coefs, rvecs=rvecs, tvecs=tvecs)
+
+def load_params(filename):
+    with open(filename, 'rb') as f:
+        myfile = np.load(f)
+        cam_cal = CamCal(myfile['rms'],myfile['camera_matrix'],myfile['dist_coefs'],myfile['rvecs'],myfile['tvecs'])
+        return cam_cal
 
 def process_image(f):
     img = cv.imread(f, 0)  # read image
@@ -47,7 +64,7 @@ if __name__ == "__main__":
     draw_corners_flg = False
 
     root = os.getcwd()
-    img_dir = "calib_L"
+    img_dir = "calib_R"
 
     os.chdir(root)
     os.chdir(img_dir)
@@ -81,10 +98,12 @@ if __name__ == "__main__":
     img_g = cv.imread(img_list[1], cv.IMREAD_GRAYSCALE)
     img_ud = cv.undistort(img_g, camera_matrix, dist_coefs, None, camera_matrix)
 
-    # os.chdir(root)
+    os.chdir(root)
+    save_params('calib_R.npy', rms, camera_matrix, dist_coefs, rvecs, tvecs)
     # with open('calib_L.npy', 'wb') as f:
-        # np.savez(f, rms=rms, camera_matrix=camera_matrix, dist_coefs=dist_coefs, rvecs=rvecs, tvecs=tvecs)
-
+    #     np.savez(f, rms=rms, camera_matrix=camera_matrix, dist_coefs=dist_coefs, rvecs=rvecs, tvecs=tvecs)
+    my_cam = load_params('calib_R.npy')
+    print(my_cam.camera_matrix)
     # print('\n\n')
     # with open('calib_L.npy', 'rb') as f:
     #     myfile = np.load(f)
@@ -92,7 +111,7 @@ if __name__ == "__main__":
 
 
     fovx, fovy, focal_length, principal_point, aspect_ratio = cv.calibrationMatrixValues(camera_matrix, (w,h), sensor_size[0], sensor_size[1])
-    print(f"fovx: {fovx}\nfovy: {fovy}\nfocal length: {focal_length}\nprincipal point: {principal_point}\naspect ratio: {aspect_ratio}")    
+    # print(f"fovx: {fovx}\nfovy: {fovy}\nfocal length: {focal_length}\nprincipal point: {principal_point}\naspect ratio: {aspect_ratio}")    
 
     plt.subplot(121)
     plt.title('Original')
