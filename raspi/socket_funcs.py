@@ -18,6 +18,13 @@ def print_debug(my_print):
 	if debug:
 		print(my_print)
 
+class Error(Exception):
+	pass
+
+class CommError(Error):
+	def __init__(self, message):
+		self.message = message
+
 
 '''
 pickles and encodes data with a with a defined 'data_type' in the format
@@ -54,7 +61,7 @@ def send_message(socket, message_data, caller):
 			print(f"Send Error:{str(e)}")
 			if caller == c.CLIENT:  # close the client if the server has disconnected
 				print('Error: Server has disconnected, closing client')
-				sys.exit()
+				return None
 			elif caller == c.SERVER:  # return None if the client has disconnected
 				return None
 		print(e)
@@ -76,8 +83,8 @@ def receive_message(client_socket, caller):
 			message_header += client_socket.recv(c.HEADER_LENGTH-len(message_header))
 
 		if len(message_header) is not c.HEADER_LENGTH:
-			print("Connection closed unexpectedly") 
-			sys.exit()
+			raise CommError("Connection closed unexpectedly")
+			return None
 
 		message_length = int(message_header.decode('utf-8'))
 		bytes_received = 0
@@ -108,6 +115,8 @@ def receive_message(client_socket, caller):
 			sys.exit()
 		elif caller == c.SERVER:  # return None if the client has disconnected
 			return None
+	except CommError as e:
+		raise CommError("Recv Error: Server disconnected") from e
 	except Exception as e:
 		print("Recv Error", e)  # could not receive message for some reason
 		return None

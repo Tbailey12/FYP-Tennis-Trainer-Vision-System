@@ -4,6 +4,7 @@ import errno
 import sys
 import time
 from datetime import datetime
+import traceback
 
 import consts as c
 import socket_funcs as sf
@@ -43,15 +44,18 @@ def connect_to_server(name):
 def read_all_server_messages():
     message_list = []
     # ---    receive all messages from the server    ---- #
-    read_sockets, _, exception_sockets = select.select([client_socket], [], [client_socket], 0)
-    while read_sockets:
-        for notified_socket in read_sockets:
-            message = sf.receive_message(notified_socket, c.CLIENT)
-            if message is None:
-                print(f"Closed connection from {c.SERVER}")
-                continue
-            message_list.append(message)
-            return message_list    
+    try:
+        read_sockets, _, exception_sockets = select.select([client_socket], [], [client_socket], 0)
+        while read_sockets:
+            for notified_socket in read_sockets:
+                message = sf.receive_message(notified_socket, c.CLIENT)
+                if message is None:
+                    print(f"Closed connection from {c.SERVER}")
+                    continue
+                message_list.append(message)
+                return message_list
+    except sf.CommError as e:
+        raise sf.CommError("Communication Error") from e
     return message_list
     
 

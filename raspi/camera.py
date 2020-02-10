@@ -1,6 +1,7 @@
 import io
 import time
 # import threading
+import traceback
 import picamera
 import numpy as np
 # import matplotlib.pyplot as plt
@@ -9,6 +10,7 @@ import multiprocessing as mp
 import queue
 import cv2
 import os
+import sys
 
 import client
 import consts as c
@@ -211,103 +213,109 @@ if __name__ == "__main__":
     Picam.start()
 
     while True:
+        try:
+            if state == c.STATE_IDLE:
+                r_led.Update(0)
+                g_led.Update(1)
+                ## -- read server messages -- ##
+                message_list.extend(client.read_all_server_messages())
 
-        if state == c.STATE_IDLE:
-            r_led.Update(0)
-            g_led.Update(1)
-            ## -- read server messages -- ##
-            message_list.extend(client.read_all_server_messages())
-            for message in message_list:
-                try:
-                    # record message
-                    if message['data'].type == c.TYPE_REC:
-                        state = c.STATE_RECORDING
-                        # change the recording time if the new recording time is valid
-                        if isinstance(message['data'].message, int):
-                            t_record.value = message['data'].message
-                        else:
-                            t_record.value = c.REC_T
-                        message_list = []
-                        break   # go and do the recording, ignore other messages
-                    elif message['data'].type == c.TYPE_CALIB:
-                        message_list = []
-                        state = c.STATE_CALIBRATION
-                        break
-                    elif message['data'].type == c.TYPE_SHUTDOWN:
-                        state = c.STATE_SHUTDOWN
-                        break
-                except:
-                    print('unrecognised message type')
-                    continue
+                for message in message_list:
+                    try:
+                        # record message
+                        if message['data'].type == c.TYPE_REC:
+                            state = c.STATE_RECORDING
+                            # change the recording time if the new recording time is valid
+                            if isinstance(message['data'].message, int):
+                                t_record.value = message['data'].message
+                            else:
+                                t_record.value = c.REC_T
+                            message_list = []
+                            break   # go and do the recording, ignore other messages
+                        elif message['data'].type == c.TYPE_CALIB:
+                            message_list = []
+                            state = c.STATE_CALIBRATION
+                            break
+                        elif message['data'].type == c.TYPE_SHUTDOWN:
+                            state = c.STATE_SHUTDOWN
+                            break
+                    except:
+                        print('unrecognised message type')
+                        continue
 
+                        
+            elif state == c.STATE_RECORDING:
+                print('recording')
+                g_led.Update(100)
+                r_led.Update(1)
+                picam_ready.wait()  # waits for the picam to initialise
+                processing_complete.clear()
+                recording.set()
+
+                errors = 0
+                while True: # wait here until all frames have been processed and sent to server
+                    try: 
+                        # get the processed frames from queue
+                        frame_n, y_data = processed_frames.get_nowait()
+                        m = [(frame_n,i,i) for i in range(1000)]
+                        message = sf.MyMessage(c.TYPE_BALLS, m)
+                        if not sf.send_message(client.client_socket, message, c.CLIENT):
+                            errors += 1
+                            print(f"error: {errors}")
                     
-        elif state == c.STATE_RECORDING:
-            print('recording')
-            g_led.Update(100)
-            r_led.Update(1)
-            picam_ready.wait()  # waits for the picam to initialise
-            processing_complete.clear()
-            recording.set()
+                    # if processing complete and no more data to send to server
+                    except queue.Empty:
+                        if processing_complete.is_set():
+                            break
+                # if there were no transmission errors send True, else send False
+                if errors == 0:
+                    message = sf.MyMessage(c.TYPE_DONE, True)
+                else:
+                    message = sf.MyMessage(c.TYPE_DONE, False)
+                sf.send_message(client.client_socket, message, c.CLIENT)
 
-            errors = 0
-            while True: # wait here until all frames have been processed and sent to server
-                try: 
-                    # get the processed frames from queue
-                    frame_n, y_data = processed_frames.get_nowait()
-                    m = [(frame_n,i,i) for i in range(1000)]
-                    message = sf.MyMessage(c.TYPE_BALLS, m)
-                    if not sf.send_message(client.client_socket, message, c.CLIENT):
-                        errors += 1
-                        print(f"error: {errors}")
-                
-                # if processing complete and no more data to send to server
-                except queue.Empty:
-                    if processing_complete.is_set():
-                        break
-            # if there were no transmission errors send True, else send False
-            if errors == 0:
-                message = sf.MyMessage(c.TYPE_DONE, True)
-            else:
-                message = sf.MyMessage(c.TYPE_DONE, False)
-            sf.send_message(client.client_socket, message, c.CLIENT)
+                state = c.STATE_IDLE    # reset the state to IDLE and wait for next instruction
+                continue
 
-            state = c.STATE_IDLE    # reset the state to IDLE and wait for next instruction
-            continue
+            elif state == c.STATE_CALIBRATION:
+                print('calibrating')
+                picam_ready.wait()  # waits for the picam to initialise
+                g_led.Update(1)
+                time.sleep(2)   # wait for person to get ready with calib board
+                r_led.Update(1)
+                processing_complete.clear()
+                calibration.set()
+                recording.set()
+                t_record.value = c.CALIB_T
 
-        elif state == c.STATE_CALIBRATION:
-            print('calibrating')
-            picam_ready.wait()  # waits for the picam to initialise
-            g_led.Update(1)
-            time.sleep(2)   # wait for person to get ready with calib board
-            r_led.Update(1)
-            processing_complete.clear()
-            calibration.set()
-            recording.set()
-            t_record.value = c.CALIB_T
+                while True:
+                    try:
+                        # get the frames from queue
+                        n_frame, frame_buf = processed_frames.get_nowait()
+                        # y_data is a numpy array hxw with 8 bit greyscale brightness values
+                        y_data = np.frombuffer(frame_buf, dtype=np.uint8, count=w*h).reshape((h,w))
+                        cv2.imwrite(f"{n_frame}.png", y_data)
+                    except queue.Empty:
+                        if not recording.is_set():  # if the recording has finished
+                            break
+                t_record.value = c.REC_T
+                calibration.clear()
 
-            while True:
-                try:
-                    # get the frames from queue
-                    n_frame, frame_buf = processed_frames.get_nowait()
-                    # y_data is a numpy array hxw with 8 bit greyscale brightness values
-                    y_data = np.frombuffer(frame_buf, dtype=np.uint8, count=w*h).reshape((h,w))
-                    cv2.imwrite(f"{n_frame}.png", y_data)
-                except queue.Empty:
-                    if not recording.is_set():  # if the recording has finished
-                        break
-            t_record.value = c.REC_T
-            calibration.clear()
+                errors = 0
+                if errors == 0:
+                    message = sf.MyMessage(c.TYPE_DONE, True)
+                else:
+                    message = sf.MyMessage(c.TYPE_DONE, False)
+                sf.send_message(client.client_socket, message, c.CLIENT)
 
-            errors = 0
-            if errors == 0:
-                message = sf.MyMessage(c.TYPE_DONE, True)
-            else:
-                message = sf.MyMessage(c.TYPE_DONE, False)
-            sf.send_message(client.client_socket, message, c.CLIENT)
+                state = c.STATE_IDLE
 
-            state = c.STATE_IDLE
-
-        elif state == c.STATE_SHUTDOWN:
+        except sf.CommError as e:
+                    traceback.print_exc(file=sys.stdout)
+                    state = c.STATE_SHUTDOWN
+                    continue
+                    
+        if state == c.STATE_SHUTDOWN:
             r_led.Update(10)
             g_led.Update(0)
             print('shutdown (main)')
