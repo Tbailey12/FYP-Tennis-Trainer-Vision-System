@@ -126,29 +126,57 @@ def StartPicam(unprocessed_frames, processed_frames, recording, shutdown, picam_
         camera.stop_recording()
     return
 
-def LED(led_pin, led_freq, shutdown):
-    GPIO.setmode(GPIO.BCM)
-    GPIO.setwarnings(False)
-    GPIO.setup(led_pin, GPIO.OUT)
-    while True:
-        if shutdown.is_set():
-            GPIO.cleanup()
-            break
-        t = 0
-        if (led_freq.value >= c.LED_F_MIN) and (led_freq.value <= c.LED_F_MAX):
-            t = abs(1/2*led_freq.value)
 
-            GPIO.output(led_pin, GPIO.HIGH)
-            time.sleep(t)
-            GPIO.output(led_pin, GPIO.LOW)
-            time.sleep(t)
-        elif led_freq.value > c.LED_F_MAX:
-            GPIO.output(led_pin, GPIO.HIGH)
-            time.sleep(1)
-        else:
-            GPIO.output(led_pin, GPIO.LOW)
-            time.sleep(1)
-    return
+class LED(object):
+    def __init__(self, led_pin, led_freq, shutdown):
+        self.led_pin = led_pin
+        self.led_freq = led_freq
+        self.shutdown = shutdown
+        self.process = None
+
+        GPIO.setmode(GPIO.BCM)
+        GPIO.setwarnings(False)
+        GPIO.setup(led_pin, GPIO.OUT)
+
+    def Update(self, led_freq):
+        if self.led_freq == led_freq:
+            return
+        self.led_freq = led_freq
+        # terminate any existing LED process
+        if self.process:
+            if self.process.is_alive():
+                self.process.kill()
+        # start new LED process with the new flash frequency
+        self.process = mp.Process(target=self.Run,args=(self.led_pin,self.led_freq,self.shutdown))
+        self.process.start()
+
+    def Kill(self):
+        if self.process is not None:
+            if self.process.is_alive():
+                self.process.kill()
+        GPIO.cleanup()
+
+    def Run(self,led_pin,led_freq,shutdown):
+        while True:
+            if shutdown.is_set():
+                GPIO.cleanup()
+                break
+            t = 0
+            if (led_freq >= c.LED_F_MIN) and (led_freq <= c.LED_F_MAX):
+                t = abs(1/(2*led_freq))
+
+                GPIO.output(led_pin, GPIO.HIGH)
+                time.sleep(t)
+                GPIO.output(led_pin, GPIO.LOW)
+                time.sleep(t)
+            elif led_freq > c.LED_F_MAX:
+                GPIO.output(led_pin, GPIO.HIGH)
+                time.sleep(1)
+            else:
+                GPIO.output(led_pin, GPIO.LOW)
+                time.sleep(1)
+        return
+
 
 if __name__ == "__main__":
     message_list = []
@@ -166,16 +194,16 @@ if __name__ == "__main__":
     processing_complete = mp.Event()
     t_record = mp.Value('i',c.REC_T)
 
-    r_led_f = mp.Value('d', c.R_LED_F)
-    g_led_f = mp.Value('d', c.G_LED_F)
+    r_led = LED(c.R_LED_PIN, 0, shutdown)
+    g_led = LED(c.G_LED_PIN, 0, shutdown)
 
     state = c.STATE_IDLE    # sets the default state
 
     ## -- initialise GPIO processes for LEDs -- ##
-    r_led = mp.Process(target=LED, args=(c.R_LED_PIN, r_led_f, shutdown))
-    r_led.start()
-    g_led = mp.Process(target=LED, args=(c.G_LED_PIN, g_led_f, shutdown))
-    g_led.start()
+    # r_led = mp.Process(target=LED, args=(c.R_LED_PIN, r_led_f, shutdown))
+    # r_led.start()
+    # g_led = mp.Process(target=LED, args=(c.G_LED_PIN, g_led_f, shutdown))
+    # g_led.start()
 
 
     ## -- initialise Picam process for recording
@@ -185,8 +213,8 @@ if __name__ == "__main__":
     while True:
 
         if state == c.STATE_IDLE:
-            r_led_f.value = 0
-            g_led_f.value = 1
+            r_led.Update(0)
+            g_led.Update(1)
             ## -- read server messages -- ##
             message_list.extend(client.read_all_server_messages())
             for message in message_list:
@@ -215,8 +243,8 @@ if __name__ == "__main__":
                     
         elif state == c.STATE_RECORDING:
             print('recording')
-            g_led_f.value = 100
-            r_led_f.value = 1
+            g_led.Update(100)
+            r_led.Update(1)
             picam_ready.wait()  # waits for the picam to initialise
             processing_complete.clear()
             recording.set()
@@ -249,9 +277,9 @@ if __name__ == "__main__":
         elif state == c.STATE_CALIBRATION:
             print('calibrating')
             picam_ready.wait()  # waits for the picam to initialise
-            g_led_f.value = 1
+            g_led.Update(1)
             time.sleep(2)   # wait for person to get ready with calib board
-            r_led_f.value = 1
+            r_led.Update(1)
             processing_complete.clear()
             calibration.set()
             recording.set()
@@ -280,8 +308,8 @@ if __name__ == "__main__":
             state = c.STATE_IDLE
 
         elif state == c.STATE_SHUTDOWN:
-            r_led_f.value = 10
-            g_led_f.value = 0
+            r_led.Update(10)
+            g_led.Update(0)
             print('shutdown (main)')
             shutdown.set()
             break

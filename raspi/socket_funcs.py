@@ -44,7 +44,7 @@ def send_message(socket, message_data, caller):
 	except ConnectionResetError as e:
 		if caller == c.CLIENT:  # close the client if the server has disconnected
 			print('Error: Server has disconnected, closing client')
-			return None
+			sys.exit()
 		elif caller == c.SERVER:  # return None if the client has disconnected
 			return None
 		return None
@@ -77,7 +77,7 @@ def receive_message(client_socket, caller):
 
 		if len(message_header) is not c.HEADER_LENGTH:
 			print("Connection closed unexpectedly") 
-			return None
+			sys.exit()
 
 		message_length = int(message_header.decode('utf-8'))
 		bytes_received = 0
