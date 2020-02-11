@@ -25,6 +25,8 @@ resolution = w,h
 framerate = 90
 n_processors = 4    # number of processors to use for CV
 
+client_name = c.LEFT_CLIENT
+
 def ImageProcessor(unprocessed_frames, processed_frames, recording, proc_complete, calibration):
     processing = False
     proc_complete.set()
@@ -98,6 +100,7 @@ def StartPicam(unprocessed_frames, processed_frames, recording, shutdown, picam_
         camera.framerate = framerate
         camera.resolution = resolution
         camera.vflip = True # camera is upside down so flip the image
+        camera.hflip = True # flip horizontal too
         ## -- adds the frame number to the image for testing
         # camera.annotate_frame_num = True
         camera.annotate_text_size = 160
@@ -185,7 +188,7 @@ if __name__ == "__main__":
     message_list = []
 
     ## -- setup client connection to server -- ##
-    client.connect_to_server(name=c.LEFT_CLIENT) 
+    client.connect_to_server(name=client_name) 
 
     ## -- initialise multithreading objs -- ##
     unprocessed_frames = mp.Queue()

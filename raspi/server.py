@@ -93,23 +93,18 @@ if __name__ == "__main__":
     state = c.STATE_STOP
     last_len = 0
 
-    quit_flg = 0
+    left_done = False
+    right_done = False
     
     while True:
         time.sleep(1/1000)
 
         if state == c.STATE_IDLE:
-            last_len = 0
-            if quit_flg == 1:
-                rec_obj = sf.MyMessage(c.TYPE_CALIB, 1)
-                state = c.STATE_CALIBRATION
-                message_list = []
-                send_to_client(c.LEFT_CLIENT, rec_obj)
-                continue
-            rec_obj = sf.MyMessage(c.TYPE_REC, 1)
-            state = c.STATE_RECORDING
+            rec_obj = sf.MyMessage(c.TYPE_CALIB, 1)
+            state = c.STATE_CALIBRATION
+            message_list = []
             send_to_client(c.LEFT_CLIENT, rec_obj)
-            quit_flg = 1
+            send_to_client(c.RIGHT_CLIENT, rec_obj)
             continue
 
         elif state == c.STATE_RECORDING:
@@ -133,27 +128,38 @@ if __name__ == "__main__":
                         n_frame = message_list[last_len]['data'].message[0]
                         print(n_frame)
                         y_data = message_list[last_len]['data'].message[1]
-                        cv.imwrite(f"{n_frame}.png", y_data)
+                        cv.imwrite(f"{message_list[last_len]['client']}{n_frame}.png", y_data)
+                    elif (message_list[last_len]['data'].type == c.TYPE_DONE):
+                        if message_list[last_len]['client'] == c.LEFT_CLIENT:
+                            left_done = True
+                        elif message_list[last_len]['client'] == c.RIGHT_CLIENT:
+                            right_done = True
+                        if left_done and right_done:
+                            state = c.STATE_SHUTDOWN
+                            break
                     last_len+=1
-                if(message_list[-1]['data'].type == c.TYPE_DONE):
-                    print(message_list[-1]['data'].message)
-                    state = c.STATE_SHUTDOWN
-                    continue
 
         elif state == c.STATE_STOP:
             message_list.extend(read_all_client_messages())
-            for socket in sockets_list:
-                for client_socket in sockets_list:
-                    if client_socket != server_socket:  # if the socket is not the server socket
-                        if clients[client_socket]['data'] == c.LEFT_CLIENT:
-                            state = c.STATE_IDLE
-                            del message_list[:]
+            # for socket in sockets_list:
+            clients_connected = 0
+            for client_socket in sockets_list:
+                if client_socket != server_socket:  # if the socket is not the server socket
+                    if (clients[client_socket]['data'] == c.LEFT_CLIENT) or (clients[client_socket]['data'] == c.RIGHT_CLIENT):
+                        clients_connected += 1
+            if clients_connected == 2:
+                print('both clients connected')
+                state = c.STATE_IDLE
+                time.sleep(3)
+                del message_list[:]
+                continue
 
 
         elif state == c.STATE_SHUTDOWN:
             print('shutting down')
             shut_obj = sf.MyMessage(c.TYPE_SHUTDOWN, None)
             send_to_client(c.LEFT_CLIENT, shut_obj)
+            send_to_client(c.RIGHT_CLIENT, shut_obj)
             while True:
                 time.sleep(1)
                 sys.exit()
