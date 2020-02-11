@@ -111,8 +111,7 @@ def receive_message(client_socket, caller):
 			raise CommError("Recv Error: Server disconnected") from e
 		elif caller == c.SERVER:  # return None if the client has disconnected
 			return None
-	except CommError as e:
-		raise CommError("Recv Error: Server disconnected") from e
 	except Exception as e:
 		print("Recv Error", e)  # could not receive message for some reason
+		raise CommError("Recv Error") from e
 		return None

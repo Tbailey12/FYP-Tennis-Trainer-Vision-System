@@ -262,7 +262,7 @@ if __name__ == "__main__":
                     
                     # if processing complete and no more data to send to server
                     except queue.Empty:
-                        if processing_complete.is_set():
+                        if processing_complete.is_set() and (processed_frames.qsize() == 0):
                             break
                 # if there were no transmission errors send True, else send False
                 if errors == 0:
@@ -273,6 +273,7 @@ if __name__ == "__main__":
 
                 state = c.STATE_IDLE    # reset the state to IDLE and wait for next instruction
                 continue
+
 
             elif state == c.STATE_CALIBRATION:
                 print('calibrating')
@@ -315,10 +316,12 @@ if __name__ == "__main__":
 
                 state = c.STATE_IDLE
 
+
         except sf.CommError as e:
             traceback.print_exc(file=sys.stdout)
             state = c.STATE_SHUTDOWN
             continue
+
 
         if state == c.STATE_SHUTDOWN:
             r_led.Update(10)
