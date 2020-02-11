@@ -150,7 +150,7 @@ if __name__ == "__main__":
             if clients_connected == 2:
                 print('both clients connected')
                 state = c.STATE_IDLE
-                time.sleep(3)
+                time.sleep(5)
                 del message_list[:]
                 continue
 

@@ -44,6 +44,7 @@ def process_image(f):
         if draw_corners_flg:
             img_c = cv.cvtColor(img, cv.COLOR_GRAY2BGR)
             cv.drawChessboardCorners(img_c, pattern_size, corners, found)
+            plt.axis('off')
             plt.imshow(img_c)
             plt.show()
 
@@ -95,14 +96,14 @@ if __name__ == "__main__":
     rms, camera_matrix, dist_coefs, rvecs, tvecs = cv.calibrateCamera(obj_points, img_points, (w,h), None, None)
 
     # -- Undistort an image -- #
-    img_g = cv.imread(img_list[1], cv.IMREAD_GRAYSCALE)
+    img_g = cv.imread(img_list[0], cv.IMREAD_GRAYSCALE)
     img_ud = cv.undistort(img_g, camera_matrix, dist_coefs, None, camera_matrix)
 
     os.chdir(root)
-    save_params('calib_R.npy', rms, camera_matrix, dist_coefs, rvecs, tvecs)
+    save_params(f"{img_dir}.npy", rms, camera_matrix, dist_coefs, rvecs, tvecs)
     # with open('calib_L.npy', 'wb') as f:
     #     np.savez(f, rms=rms, camera_matrix=camera_matrix, dist_coefs=dist_coefs, rvecs=rvecs, tvecs=tvecs)
-    my_cam = load_params('calib_R.npy')
+    my_cam = load_params(f"{img_dir}.npy")
     print(my_cam.camera_matrix)
     # print('\n\n')
     # with open('calib_L.npy', 'rb') as f:
