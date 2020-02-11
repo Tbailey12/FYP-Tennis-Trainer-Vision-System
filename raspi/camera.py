@@ -113,6 +113,7 @@ def StartPicam(unprocessed_frames, processed_frames, recording, shutdown, picam_
         # Picam will stay in this while loop waiting for either shutdown or recording flags to be set
         while True:
             if recording.wait(1):    # wait for recording flag to be set in main()
+                processing_complete.clear()
                 try:
                     for proc in proc_complete:  # reset all processing complete events
                         proc.clear()
@@ -125,6 +126,7 @@ def StartPicam(unprocessed_frames, processed_frames, recording, shutdown, picam_
             elif shutdown.is_set():
                 print('shutdown (picam)')
                 break
+            processing_complete.set()
         camera.stop_recording()
     return
 
@@ -249,7 +251,8 @@ if __name__ == "__main__":
                 g_led.Update(100)
                 r_led.Update(1)
                 picam_ready.wait()  # waits for the picam to initialise
-                processing_complete.clear()
+                processing_complete.wait()
+                print('recording set')
                 recording.set()
 
                 errors = 0
@@ -283,10 +286,10 @@ if __name__ == "__main__":
                 g_led.Update(1)
                 time.sleep(2)   # wait for person to get ready with calib board
                 r_led.Update(1)
-                processing_complete.clear()
+                processing_complete.wait()
                 calibration.set()
-                recording.set()
                 t_record.value = c.CALIB_T
+                recording.set()
 
                 while True:
                     try:
@@ -297,6 +300,8 @@ if __name__ == "__main__":
                         cv2.imwrite(f"{n_frame}.png", y_data)
                     except queue.Empty:
                         if not recording.is_set():  # if the recording has finished
+                            print(f"recording: {recording.is_set()}")
+                            print(t_record.value)
                             break
                 t_record.value = c.REC_T
                 calibration.clear()
@@ -311,10 +316,10 @@ if __name__ == "__main__":
                 state = c.STATE_IDLE
 
         except sf.CommError as e:
-                    traceback.print_exc(file=sys.stdout)
-                    state = c.STATE_SHUTDOWN
-                    continue
-                    
+            traceback.print_exc(file=sys.stdout)
+            state = c.STATE_SHUTDOWN
+            continue
+
         if state == c.STATE_SHUTDOWN:
             r_led.Update(10)
             g_led.Update(0)

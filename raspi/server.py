@@ -100,8 +100,7 @@ if __name__ == "__main__":
             if quit_flg == 1:
                 rec_obj = sf.MyMessage(c.TYPE_CALIB, 1)
                 state = c.STATE_CALIBRATION
-                sys.exit()
-                del message_list[:]
+                message_list = []
                 send_to_client(c.LEFT_CLIENT, rec_obj)
                 continue
             rec_obj = sf.MyMessage(c.TYPE_REC, 1)

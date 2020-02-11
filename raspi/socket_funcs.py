@@ -50,8 +50,7 @@ def send_message(socket, message_data, caller):
 		# socket.sendall(message)
 	except ConnectionResetError as e:
 		if caller == c.CLIENT:  # close the client if the server has disconnected
-			print('Error: Server has disconnected, closing client')
-			sys.exit()
+			raise CommError("Error: Server disconnected") from e
 		elif caller == c.SERVER:  # return None if the client has disconnected
 			return None
 		return None
@@ -60,15 +59,14 @@ def send_message(socket, message_data, caller):
 		if e.errno != errno.EAGAIN and e.errno != errno.EWOULDBLOCK:
 			print(f"Send Error:{str(e)}")
 			if caller == c.CLIENT:  # close the client if the server has disconnected
-				print('Error: Server has disconnected, closing client')
-				return None
+				raise CommError("Error: Server disconnected") from e
 			elif caller == c.SERVER:  # return None if the client has disconnected
 				return None
 		print(e)
 		return None  # if there are no more messages and no errors
 	except Exception as e:  # could not send message for some reason
 		print("Send Error", e)
-		return False
+		raise CommError("Send Error") from e
 	return True  # if message sent successfully
 
 
@@ -84,7 +82,6 @@ def receive_message(client_socket, caller):
 
 		if len(message_header) is not c.HEADER_LENGTH:
 			raise CommError("Connection closed unexpectedly")
-			return None
 
 		message_length = int(message_header.decode('utf-8'))
 		bytes_received = 0
@@ -104,15 +101,14 @@ def receive_message(client_socket, caller):
 		if e.errno != errno.EAGAIN and e.errno != errno.EWOULDBLOCK:
 			print_debug(f"Read Error:{str(e)}")
 			if caller == c.CLIENT:  # close the client if the server has disconnected
-				print('Error: Server has disconnected, closing client')
-				sys.exit()
+				raise CommError("Error: Server disconnected") from e
 			elif caller == c.SERVER:  # return None if the client has disconnected
 				return None
 		return None  # if there are no more messages and no errors
 	except ConnectionResetError as e:
 		if caller == c.CLIENT:  # close the client if the server has disconnected
 			print('Error: Server has disconnected, closing client')
-			sys.exit()
+			raise CommError("Recv Error: Server disconnected") from e
 		elif caller == c.SERVER:  # return None if the client has disconnected
 			return None
 	except CommError as e:

@@ -23,6 +23,10 @@ def connect_to_server(name):
     while True:
         try:
             client_socket.connect((c.IP, c.PORT))  # connect to server
+            print(f"Connection Established to server on {c.IP}:{c.PORT}")
+            client_socket.setblocking(True)
+            sf.send_message(client_socket, name, c.CLIENT)  # send name to server
+            time.sleep(1)
         except socket.error as e:
             print("Connection could not be established to server, trying again...")
             time.sleep(5)
@@ -33,11 +37,7 @@ def connect_to_server(name):
             continue
         except Exception as e:
             print('Error', str(e))
-            sys.exit()
-        print(f"Connection Established to server on {c.IP}:{c.PORT}")
-        client_socket.setblocking(True)
-        sf.send_message(client_socket, name, c.CLIENT)  # send name to server
-        time.sleep(1)
+            raise sf.CommError("Communication Error") from e
         break
 
 
