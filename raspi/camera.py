@@ -126,7 +126,6 @@ def StartPicam(unprocessed_frames, processed_frames, recording, shutdown, picam_
             elif shutdown.is_set():
                 print('shutdown (picam)')
                 break
-            processing_complete.set()
         camera.stop_recording()
     return
 
@@ -202,13 +201,7 @@ if __name__ == "__main__":
     g_led = LED(c.G_LED_PIN, 0, shutdown)
 
     state = c.STATE_IDLE    # sets the default state
-
-    ## -- initialise GPIO processes for LEDs -- ##
-    # r_led = mp.Process(target=LED, args=(c.R_LED_PIN, r_led_f, shutdown))
-    # r_led.start()
-    # g_led = mp.Process(target=LED, args=(c.G_LED_PIN, g_led_f, shutdown))
-    # g_led.start()
-
+    processing_complete.set() # inintially there is no processing being done
 
     ## -- initialise Picam process for recording
     Picam = mp.Process(target=StartPicam, args=(unprocessed_frames, processed_frames, recording, shutdown, picam_ready, processing_complete, t_record, calibration))
@@ -259,8 +252,9 @@ if __name__ == "__main__":
                 while True: # wait here until all frames have been processed and sent to server
                     try: 
                         # get the processed frames from queue
-                        frame_n, y_data = processed_frames.get_nowait()
-                        m = [(frame_n,i,i) for i in range(1000)]
+                        n_frame, y_data = processed_frames.get_nowait()
+                        print(f"rec: {n_frame}")
+                        m = [(n_frame,i,i) for i in range(1000)]
                         message = sf.MyMessage(c.TYPE_BALLS, m)
                         if not sf.send_message(client.client_socket, message, c.CLIENT):
                             errors += 1
@@ -291,27 +285,33 @@ if __name__ == "__main__":
                 t_record.value = c.CALIB_T
                 recording.set()
 
+                errors = 0
+
                 while True:
                     try:
                         # get the frames from queue
                         n_frame, frame_buf = processed_frames.get_nowait()
+                        print(f"calib: {n_frame}")
                         # y_data is a numpy array hxw with 8 bit greyscale brightness values
                         y_data = np.frombuffer(frame_buf, dtype=np.uint8, count=w*h).reshape((h,w))
-                        cv2.imwrite(f"{n_frame}.png", y_data)
+                        message = sf.MyMessage(c.TYPE_IMG, (n_frame, y_data))
+                        if not sf.send_message(client.client_socket, message, c.CLIENT):
+                            errors += 1
+                            print(f"error: {errors}")
+
                     except queue.Empty:
                         if not recording.is_set():  # if the recording has finished
-                            print(f"recording: {recording.is_set()}")
-                            print(t_record.value)
                             break
-                t_record.value = c.REC_T
-                calibration.clear()
 
-                errors = 0
+                # if there were no transmission errors send True, else send False
                 if errors == 0:
                     message = sf.MyMessage(c.TYPE_DONE, True)
                 else:
                     message = sf.MyMessage(c.TYPE_DONE, False)
                 sf.send_message(client.client_socket, message, c.CLIENT)
+                
+                t_record.value = c.REC_T
+                calibration.clear()
 
                 state = c.STATE_IDLE
 

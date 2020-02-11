@@ -8,6 +8,8 @@ import time
 import sys
 from datetime import datetime
 
+import cv2 as cv
+
 import consts as c
 import socket_funcs as sf
 
@@ -97,6 +99,7 @@ if __name__ == "__main__":
         time.sleep(1/1000)
 
         if state == c.STATE_IDLE:
+            last_len = 0
             if quit_flg == 1:
                 rec_obj = sf.MyMessage(c.TYPE_CALIB, 1)
                 state = c.STATE_CALIBRATION
@@ -112,10 +115,8 @@ if __name__ == "__main__":
         elif state == c.STATE_RECORDING:
             message_list.extend(read_all_client_messages())
             while last_len < len(message_list):
-                if type(message_list[last_len]['data'].message) is list:
-                    print(message_list[last_len]['data'].message[0])
-                else:
-                    print(message_list[last_len]['data'].message)
+                if (message_list[last_len]['data'].type == c.TYPE_BALLS):
+                    print(message_list[last_len]['data'].message[0][0])
                 last_len+=1
             last_len = len(message_list)
             if len(message_list) > 0:
@@ -127,6 +128,13 @@ if __name__ == "__main__":
         elif state == c.STATE_CALIBRATION:
             message_list.extend(read_all_client_messages())
             if len(message_list) > 0:
+                while last_len < len(message_list):
+                    if (message_list[last_len]['data'].type == c.TYPE_IMG):
+                        n_frame = message_list[last_len]['data'].message[0]
+                        print(n_frame)
+                        y_data = message_list[last_len]['data'].message[1]
+                        cv.imwrite(f"{n_frame}.png", y_data)
+                    last_len+=1
                 if(message_list[-1]['data'].type == c.TYPE_DONE):
                     print(message_list[-1]['data'].message)
                     state = c.STATE_SHUTDOWN
