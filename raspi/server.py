@@ -12,6 +12,8 @@ import cv2 as cv
 
 import consts as c
 import socket_funcs as sf
+import camera_calibration as cal
+import stereo_calibration as s_cal
 
 debug = c.DEBUG
 
@@ -28,7 +30,6 @@ def send_to_client(client_name, message):
             if clients[client_socket]['data'] == client_name:
                 print_debug(f"Sending message to {client_name} client: Time: {message}")
                 sf.send_message(client_socket, message, c.SERVER)
-
 
 def read_all_client_messages():
     message_list = []
@@ -73,7 +74,146 @@ def read_all_client_messages():
         # read_sockets, _, exception_sockets = select.select(sockets_list, [], sockets_list, 0)
         return message_list
     return []
- 
+
+def server_help():
+    helpstring = '''
+    Server cmd list:
+    help - display list of server commands
+    calibrate - calibrates the stereo cameras using 10 images
+    '''
+    return helpstring
+
+def initialise():
+    message_list = []
+    left_connected = False
+    right_connected = False
+
+    while True:
+        message_list.extend(read_all_client_messages())
+        for client_socket in sockets_list:
+            if client_socket != server_socket:  # if the socket is not the server socket
+                if clients[client_socket]['data'] == c.LEFT_CLIENT:
+                    left_connected = True
+                elif clients[client_socket]['data'] == c.RIGHT_CLIENT:
+                    right_connected = True
+
+        if left_connected and right_connected:
+            print('both clients connected')
+            return True
+
+
+def record(stereo_calib = None, record_time = c.REC_T):
+    # if stereo_calib is None:
+    #     print('stereo cameras must first be calibrated')
+
+    message_list = []
+    pos = 0
+    left_done = False
+    right_done = False
+
+    rec_obj = sf.MyMessage(c.TYPE_REC, record_time)
+    send_to_client(c.LEFT_CLIENT, rec_obj)
+    send_to_client(c.RIGHT_CLIENT, rec_obj)
+
+    while True:
+        message_list.extend(read_all_client_messages())
+        while pos < len(message_list):
+            if message_list[pos]['data'].type == c.TYPE_BALLS:
+                print(message_list[pos]['data'].message[0][0])
+
+            elif message_list[pos]['data'].type == c.TYPE_DONE:
+                if message_list[pos]['client'] == c.LEFT_CLIENT:
+                    left_done = True
+                elif message_list[pos]['client'] == c.RIGHT_CLIENT:
+                    right_done = True
+                if left_done and right_done:
+                    print('recording finished')
+                    return True
+            else:
+                print(f"unknown message format for recording: {message_list[pos]['data'].type}")
+            pos+=1
+
+def calibrate():
+    message_list = []
+    left_calib_imgs = []
+    right_calib_imgs = []
+    pos = 0
+    left_done = False
+    right_done = False
+    img_size = None
+
+    cal_message = sf.CalMessage(num_img = 1, img_delay=1)
+    rec_obj = sf.MyMessage(c.TYPE_CALIB, cal_message)
+    send_to_client(c.LEFT_CLIENT, rec_obj)
+    send_to_client(c.RIGHT_CLIENT, rec_obj)
+
+    while True:
+        message_list.extend(read_all_client_messages())
+        if len(message_list) > 0:
+            while pos < len(message_list):
+                # when the clients send an image during calibration
+                if (message_list[pos]['data'].type == c.TYPE_IMG):
+                    n_frame = message_list[pos]['data'].message[0]
+                    print(n_frame)
+                    y_data = message_list[pos]['data'].message[1]
+                    if img_size is None:
+                        (h,w) = y_data.shape[:2]
+                        img_size = (w,h)
+                    # add the img to the corresponding calibration img list
+                    if message_list[pos]['client'] == c.LEFT_CLIENT:
+                        left_calib_imgs.append((n_frame, y_data))
+                    elif message_list[pos]['client'] == c.RIGHT_CLIENT:                    
+                        right_calib_imgs.append((n_frame, y_data))
+                    # cv.imwrite(f"{message_list[last_len]['client']}{n_frame}.png",y_data)
+
+                # when both clients send the done message, they are finished collecting frames
+                elif (message_list[pos]['data'].type == c.TYPE_DONE):
+                    if message_list[pos]['client'] == c.LEFT_CLIENT:
+                        left_done = True
+                    elif message_list[pos]['client'] == c.RIGHT_CLIENT:
+                        right_done = True
+                    if left_done and right_done:
+                        left_done = False
+                        right_done = False
+                        # load camera intrinsic calibration data 
+                        left_cal = cal.load_params(c.LEFT_CALIB_F)
+                        right_cal = cal.load_params(c.RIGHT_CALIB_F)
+
+                        left_chessboards = cal.find_chessboards(left_calib_imgs)
+                        right_chessboards = cal.find_chessboards(right_calib_imgs)
+
+                        s_cal.validate_chessboards(left_chessboards, right_chessboards)
+
+                        if len(left_chessboards) < c.MIN_PATTERNS:
+                            print('not enough chessboards were found, aborting calibration')
+                            return False
+                        else:
+                            # calibrated stereo cameras
+                            RMS, cameraMatrix1, distCoeffs1, cameraMatrix2, distCoeffs2, R, T, E, F = s_cal.calibrate_stereo(
+                                left_chessboards, right_chessboards, left_cal, right_cal, img_size)
+    
+                            # obtain stereo rectification projection matrices
+                            R1, R2, P1, P2, Q, validPixROI1, validPixROI2 = cv.stereoRectify(cameraMatrix1, distCoeffs1,
+                                                        cameraMatrix2, distCoeffs2, img_size, R, T)
+
+                            # save all calibration params to object
+                            stereo_calib =  s_cal.StereoCal(RMS, cameraMatrix1, distCoeffs1, cameraMatrix2, distCoeffs2, R, T, E, F,
+                                                        R1, R2, P1, P2, Q, validPixROI1, validPixROI2)
+
+                            stereo_calib.save_params(c.STEREO_CALIB_F)
+                            print('calibration complete')
+                            return stereo_calib
+                pos+=1
+
+def shutdown():
+    print('shutting down')
+    shut_obj = sf.MyMessage(c.TYPE_SHUTDOWN, None)
+    send_to_client(c.LEFT_CLIENT, shut_obj)
+    send_to_client(c.RIGHT_CLIENT, shut_obj)
+    while True:
+        time.sleep(1)
+        sys.exit()
+
 server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)  # create IPV4 socket for server
 server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)  # allows us to reconnect to same port
 
@@ -88,78 +228,103 @@ clients = {}  # list of clients
 j = 0
 
 if __name__ == "__main__":
-    message_list = []
-
-    state = c.STATE_STOP
-    last_len = 0
-
-    left_done = False
-    right_done = False
+    initialise()
     
     while True:
         time.sleep(1/1000)
 
-        if state == c.STATE_IDLE:
-            rec_obj = sf.MyMessage(c.TYPE_CALIB, 1)
-            state = c.STATE_CALIBRATION
-            message_list = []
-            send_to_client(c.LEFT_CLIENT, rec_obj)
-            send_to_client(c.RIGHT_CLIENT, rec_obj)
-            continue
+        cmd = input("Enter server cmd: ")
+        if cmd == "help":
+            print(server_help())
+        elif cmd == "calibrate":
+            calibrate()
+        elif cmd == "record":
+            record()
+        elif cmd == "shutdown":
+            shutdown()
+        continue
 
-        elif state == c.STATE_RECORDING:
-            message_list.extend(read_all_client_messages())
-            while last_len < len(message_list):
-                if (message_list[last_len]['data'].type == c.TYPE_BALLS):
-                    print(message_list[last_len]['data'].message[0][0])
-                last_len+=1
-            last_len = len(message_list)
-            if len(message_list) > 0:
-                if(message_list[-1]['data'].type == c.TYPE_DONE):
-                    print(message_list[-1]['data'].message)
-                    state = c.STATE_IDLE
-                    continue
+        # elif state == c.STATE_CALIBRATION:
+        #     message_list.extend(read_all_client_messages())
+        #     if len(message_list) > 0:
+        #         while last_len < len(message_list):
+        #             # when the clients send an image during calibration
+        #             if (message_list[last_len]['data'].type == c.TYPE_IMG):
+        #                 n_frame = message_list[last_len]['data'].message[0]
+        #                 print(n_frame)
+        #                 y_data = message_list[last_len]['data'].message[1]
+        #                 if img_size == 0:
+        #                     (h,w) = y_data.shape[:2]
+        #                     img_size = (w,h)
+        #                 # add the img to the corresponding calibration img list
+        #                 if message_list[last_len]['client'] == c.LEFT_CLIENT:
+        #                     left_calib_imgs.append((n_frame, y_data))
+        #                 elif message_list[last_len]['client'] == c.RIGHT_CLIENT:                    
+        #                     right_calib_imgs.append((n_frame, y_data))
+        #                 # cv.imwrite(f"{message_list[last_len]['client']}{n_frame}.png",y_data)
 
-        elif state == c.STATE_CALIBRATION:
-            message_list.extend(read_all_client_messages())
-            if len(message_list) > 0:
-                while last_len < len(message_list):
-                    if (message_list[last_len]['data'].type == c.TYPE_IMG):
-                        n_frame = message_list[last_len]['data'].message[0]
-                        print(n_frame)
-                        y_data = message_list[last_len]['data'].message[1]
-                        cv.imwrite(f"{message_list[last_len]['client']}{n_frame}.png", y_data)
-                    elif (message_list[last_len]['data'].type == c.TYPE_DONE):
-                        if message_list[last_len]['client'] == c.LEFT_CLIENT:
-                            left_done = True
-                        elif message_list[last_len]['client'] == c.RIGHT_CLIENT:
-                            right_done = True
-                        if left_done and right_done:
-                            state = c.STATE_SHUTDOWN
-                            break
-                    last_len+=1
+        #             # when both clients send the done message, they are finished collecting frames
+        #             elif (message_list[last_len]['data'].type == c.TYPE_DONE):
+        #                 if message_list[last_len]['client'] == c.LEFT_CLIENT:
+        #                     left_done = True
+        #                 elif message_list[last_len]['client'] == c.RIGHT_CLIENT:
+        #                     right_done = True
+        #                 if left_done and right_done:
+        #                     left_done = False
+        #                     right_done = False
+        #                     # load camera intrinsic calibration data 
+        #                     left_cal = cal.load_params(c.LEFT_CALIB_F)
+        #                     right_cal = cal.load_params(c.RIGHT_CALIB_F)
 
-        elif state == c.STATE_STOP:
-            message_list.extend(read_all_client_messages())
-            # for socket in sockets_list:
-            clients_connected = 0
-            for client_socket in sockets_list:
-                if client_socket != server_socket:  # if the socket is not the server socket
-                    if (clients[client_socket]['data'] == c.LEFT_CLIENT) or (clients[client_socket]['data'] == c.RIGHT_CLIENT):
-                        clients_connected += 1
-            if clients_connected == 2:
-                print('both clients connected')
-                state = c.STATE_IDLE
-                time.sleep(5)
-                del message_list[:]
-                continue
+        #                     left_chessboards = cal.find_chessboards(left_calib_imgs)
+        #                     right_chessboards = cal.find_chessboards(right_calib_imgs)
+
+        #                     s_cal.validate_chessboards(left_chessboards, right_chessboards)
+
+        #                     if len(left_chessboards) < c.MIN_PATTERNS:
+        #                         print('not enough chessboards were found, aborting calibration')
+        #                         left_calib_imgs = []
+        #                         right_calib_imgs = []
+        #                         state = c.STATE_IDLE
+        #                         last_len = 0
+        #                         break
+        #                     else:
+        #                         # calibrated stereo cameras
+        #                         RMS, cameraMatrix1, distCoeffs1, cameraMatrix2, distCoeffs2, R, T, E, F = s_cal.calibrate_stereo(
+        #                             left_chessboards, right_chessboards, left_cal, right_cal, img_size)
+        
+        #                         # obtain stereo rectification projection matrices
+        #                         R1, R2, P1, P2, Q, validPixROI1, validPixROI2 = cv.stereoRectify(cameraMatrix1, distCoeffs1,
+        #                                                     cameraMatrix2, distCoeffs2, img_size, R, T)
+
+        #                         # save all calibration params to object
+        #                         stereo_calib =  s_cal.StereoCal(RMS, cameraMatrix1, distCoeffs1, cameraMatrix2, distCoeffs2, R, T, E, F,
+        #                                                     R1, R2, P1, P2, Q, validPixROI1, validPixROI2)
+
+        #                         stereo_calib.save_params(c.STEREO_CALIB_F)
+        #                         print('calibration complete')
+        #             last_len+=1
+
+        # elif state == c.STATE_STOP:
+        #     message_list.extend(read_all_client_messages())
+        #     # for socket in sockets_list:
+        #     clients_connected = 0
+        #     for client_socket in sockets_list:
+        #         if client_socket != server_socket:  # if the socket is not the server socket
+        #             if (clients[client_socket]['data'] == c.LEFT_CLIENT) or (clients[client_socket]['data'] == c.RIGHT_CLIENT):
+        #                 clients_connected += 1
+        #     if clients_connected == 2:
+        #         print('both clients connected')
+        #         state = c.STATE_IDLE
+        #         del message_list[:]
+        #         continue
 
 
-        elif state == c.STATE_SHUTDOWN:
-            print('shutting down')
-            shut_obj = sf.MyMessage(c.TYPE_SHUTDOWN, None)
-            send_to_client(c.LEFT_CLIENT, shut_obj)
-            send_to_client(c.RIGHT_CLIENT, shut_obj)
-            while True:
-                time.sleep(1)
-                sys.exit()
+        # elif state == c.STATE_SHUTDOWN:
+        #     print('shutting down')
+        #     shut_obj = sf.MyMessage(c.TYPE_SHUTDOWN, None)
+        #     send_to_client(c.LEFT_CLIENT, shut_obj)
+        #     send_to_client(c.RIGHT_CLIENT, shut_obj)
+        #     while True:
+        #         time.sleep(1)
+        #         sys.exit()

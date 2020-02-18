@@ -22,7 +22,7 @@ import RPi.GPIO as GPIO
 # w,h = (1280,720)
 w,h = (640,480)
 resolution = w,h
-framerate = 90
+framerate = c.FRAMERATE
 n_processors = 4    # number of processors to use for CV
 
 client_name = c.LEFT_CLIENT
@@ -57,11 +57,12 @@ def ImageProcessor(unprocessed_frames, processed_frames, recording, proc_complet
                     proc_complete.set()     # set the proc_complete event
 
 class FrameController(object):
-    def __init__(self, unprocessed_frames, processed_frames, recording, proc_complete, calibration):
+    def __init__(self, unprocessed_frames, processed_frames, recording, proc_complete, calibration, n_calib):
         self.unprocessed_frames = unprocessed_frames
         self.processed_frames = processed_frames
         self.recording = recording
         self.calibration = calibration
+        self.n_calib = n_calib
         self.proc_complete = proc_complete
         self.number_of_processors = n_processors
         self.processors = []
@@ -78,7 +79,7 @@ class FrameController(object):
     def write(self, buf):
         if self.recording.is_set():
             if self.calibration.is_set():
-                if self.n_frame%framerate == 0:
+                if self.n_frame%n_calib.value == 0:
                     self.processed_frames.put((self.n_frame, buf))
             else:
                 self.unprocessed_frames.put((self.n_frame, buf))    # add the new frame to the queue
@@ -94,7 +95,7 @@ class FrameController(object):
         print('shutdown complete')
 
 
-def StartPicam(unprocessed_frames, processed_frames, recording, shutdown, picam_ready, processing_complete, t_record, calibration):
+def StartPicam(unprocessed_frames, processed_frames, recording, shutdown, picam_ready, processing_complete, t_record, calibration, n_calib):
     proc_complete = []     # contains processing events, true if complete
     with picamera.PiCamera() as camera:
         camera.framerate = framerate
@@ -108,7 +109,7 @@ def StartPicam(unprocessed_frames, processed_frames, recording, shutdown, picam_
         ## ----------------------------------------------- ##
         time.sleep(2)   # give the camera a couple of seconds to initialise
 
-        output = FrameController(unprocessed_frames, processed_frames, recording, proc_complete, calibration)
+        output = FrameController(unprocessed_frames, processed_frames, recording, proc_complete, calibration, n_calib)
         camera.start_recording(output, format='yuv')
 
         picam_ready.set()   # the picam is ready to record
@@ -144,8 +145,8 @@ class LED(object):
         GPIO.setwarnings(False)
         GPIO.setup(led_pin, GPIO.OUT)
 
-    def Update(self, led_freq):
-        if self.led_freq == led_freq:
+    def Update(self, led_freq, force = False):
+        if self.led_freq == led_freq and force == False:
             return
         self.led_freq = led_freq
         # terminate any existing LED process
@@ -199,6 +200,7 @@ if __name__ == "__main__":
     picam_ready = mp.Event()
     processing_complete = mp.Event()
     t_record = mp.Value('i',c.REC_T)
+    n_calib = mp.Value('i', int(c.FRAMERATE*c.CALIB_IMG_DELAY))
 
     r_led = LED(c.R_LED_PIN, 0, shutdown)
     g_led = LED(c.G_LED_PIN, 0, shutdown)
@@ -207,7 +209,7 @@ if __name__ == "__main__":
     processing_complete.set() # inintially there is no processing being done
 
     ## -- initialise Picam process for recording
-    Picam = mp.Process(target=StartPicam, args=(unprocessed_frames, processed_frames, recording, shutdown, picam_ready, processing_complete, t_record, calibration))
+    Picam = mp.Process(target=StartPicam, args=(unprocessed_frames, processed_frames, recording, shutdown, picam_ready, processing_complete, t_record, calibration, n_calib))
     Picam.start()
 
     while True:
@@ -231,6 +233,11 @@ if __name__ == "__main__":
                             message_list = []
                             break   # go and do the recording, ignore other messages
                         elif message['data'].type == c.TYPE_CALIB:
+                            cal_message = message['data'].message
+
+                            n_calib.value = int(c.FRAMERATE*cal_message.img_delay)
+                            t_record.value = int(cal_message.img_delay*cal_message.num_img)
+                            
                             message_list = []
                             state = c.STATE_CALIBRATION
                             break
@@ -249,6 +256,7 @@ if __name__ == "__main__":
                 picam_ready.wait()  # waits for the picam to initialise
                 processing_complete.wait()
                 print('recording set')
+                processing_complete.clear()
                 recording.set()
 
                 errors = 0
@@ -283,10 +291,10 @@ if __name__ == "__main__":
                 picam_ready.wait()  # waits for the picam to initialise
                 g_led.Update(1)
                 time.sleep(2)   # wait for person to get ready with calib board
+                g_led.Update(1, force=True)
                 r_led.Update(1)
                 processing_complete.wait()
                 calibration.set()
-                t_record.value = c.CALIB_T
                 recording.set()
 
                 errors = 0

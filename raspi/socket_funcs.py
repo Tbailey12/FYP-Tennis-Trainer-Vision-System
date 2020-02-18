@@ -13,6 +13,10 @@ class MyMessage(object):
 		self.type = my_type
 		self.message = message
 
+class CalMessage(object):
+	def __init__(self, num_img=c.CALIB_NUM_IMG, img_delay=c.CALIB_IMG_DELAY):
+		self.num_img = num_img
+		self.img_delay = img_delay
 
 def print_debug(my_print):
 	if debug:

@@ -7,6 +7,8 @@ import os
 
 import matplotlib.pyplot as plt
 
+import consts as c
+
 class CamCal(object):
     def __init__(self, rms, camera_matrix, dist_coefs, rvecs, tvecs):
         self.rms = rms
@@ -25,44 +27,60 @@ def load_params(filename):
         cam_cal = CamCal(myfile['rms'],myfile['camera_matrix'],myfile['dist_coefs'],myfile['rvecs'],myfile['tvecs'])
         return cam_cal
 
-def process_image(f):
-    img = cv.imread(f, 0)  # read image
-    if img is None:
-        print("failed to load: ", f)
-        return None
+def process_image(img_data, pattern_points):
+
+    n_frame, img = img_data
 
     # check to ensure that the image matches the width/height of the initial image
-    assert w == img.shape[1] and h == img.shape[0], ("size: %d x %d ..." % (img.shape[1], img.shape[0]))
+    # assert w == img.shape[1] and h == img.shape[0], ("size: %d x %d ..." % (img.shape[1], img.shape[0]))
 
-    found, corners = cv.findChessboardCorners(img, pattern_size)
+    found, corners = cv.findChessboardCorners(img, c.pattern_size)
     if found:
         # term defines when to stop refinement of subpixel coords
         term = (cv.TERM_CRITERIA_EPS + cv.TERM_CRITERIA_COUNT, 30, 0.1)
         cv.cornerSubPix(img, corners, (5, 5), (-1, -1), term)
-
-        # draw corners on the image depending on draw_corners flag
-        if draw_corners_flg:
-            img_c = cv.cvtColor(img, cv.COLOR_GRAY2BGR)
-            cv.drawChessboardCorners(img_c, pattern_size, corners, found)
-            plt.axis('off')
-            plt.imshow(img_c)
-            plt.show()
 
     if not found:
         print('chessboard not found')
         return None
 
     # print message if file contains chessboard
-    print('%s... OK' % f)
-    return (corners.reshape(-1, 2), pattern_points)
+    print('%s... OK' % n_frame)
+    return (n_frame, corners.reshape(-1, 2), pattern_points)
 
+def generate_pattern_points():
+    # -- Setup point lists -- #
+    pattern_points = np.zeros((np.prod(c.pattern_size), 3), np.float32)  # x,y,z for all points in image
+    pattern_points[:, :2] = np.indices(c.pattern_size).T.reshape(-1, 2)  # p.u for all point positions
+    pattern_points *= c.square_size  # scale by square size for point coords
+    return pattern_points
+
+
+def find_chessboards(img_data):
+    # frames = []
+    # obj_points = []
+    # img_points = []
+
+    pattern_points = generate_pattern_points()
+
+    # find the chessboard points in all images
+    chessboards = [process_image(img, pattern_points) for img in img_data]
+    chessboards = [x for x in chessboards if x is not None]
+
+    # split the chessboards into image points and object points
+    # for(n_frame, corners, pattern_points) in chessboards:
+    #     frames.append(n_frame)
+    #     img_points.append(corners)
+    #     obj_points.append(pattern_points)
+
+    return chessboards
 
 if __name__ == "__main__":
 
-    sensor_size = (3.68, 2.76)
-    square_size = 23.4E-3
-    pattern_size = (9, 6)  # number of points (where the black and white intersects)
-    draw_corners_flg = False
+    # sensor_size = (3.68, 2.76)
+    # square_size = 23.4E-3
+    # pattern_size = (9, 6)  # number of points (where the black and white intersects)
+    # draw_corners_flg = False
 
     root = os.getcwd()
     img_dir = "calib_R"
@@ -75,16 +93,16 @@ if __name__ == "__main__":
     img_list.sort()
 
     # -- Setup point lists -- #
-    pattern_points = np.zeros((np.prod(pattern_size), 3), np.float32)  # x,y,z for all points in image
-    pattern_points[:, :2] = np.indices(pattern_size).T.reshape(-1, 2)  # p.u for all point positions
-    pattern_points *= square_size  # scale by square size for point coords
+    pattern_points = np.zeros((np.prod(c.pattern_size), 3), np.float32)  # x,y,z for all points in image
+    pattern_points[:, :2] = np.indices(c.pattern_size).T.reshape(-1, 2)  # p.u for all point positions
+    pattern_points *= c.square_size  # scale by square size for point coords
 
     obj_points = []
     img_points = []
     h, w = cv.imread(img_list[0], cv.IMREAD_GRAYSCALE).shape[:2]  # get height and width of image
 
     # find the chessboard points in all images
-    chessboards = [process_image(f) for f in img_list]
+    chessboards = [process_image(f, True) for f in img_list]
     chessboards = [x for x in chessboards if x is not None]
 
     # split the chessboards into image points and object points
@@ -111,7 +129,8 @@ if __name__ == "__main__":
     #     a,b,c,d,e = myfile['rms'],myfile['camera_matrix'],myfile['dist_coefs'],myfile['rvecs'],myfile['tvecs']
 
 
-    fovx, fovy, focal_length, principal_point, aspect_ratio = cv.calibrationMatrixValues(camera_matrix, (w,h), sensor_size[0], sensor_size[1])
+    fovx, fovy, focal_length, principal_point, aspect_ratio = cv.calibrationMatrixValues(camera_matrix, (w,h), c.sensor_size[0], c.
+        c.sensor_size[1])
     # print(f"fovx: {fovx}\nfovy: {fovy}\nfocal length: {focal_length}\nprincipal point: {principal_point}\naspect ratio: {aspect_ratio}")    
 
     plt.subplot(121)
