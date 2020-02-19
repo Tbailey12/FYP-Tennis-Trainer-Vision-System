@@ -87,6 +87,9 @@ def initialise():
     message_list = []
     left_connected = False
     right_connected = False
+    ####################################################
+    right_connected = True
+    ####################################################
 
     while True:
         message_list.extend(read_all_client_messages())
@@ -110,10 +113,15 @@ def record(stereo_calib = None, record_time = c.REC_T):
     pos = 0
     left_done = False
     right_done = False
+    ####################################################
+    right_done = True
+    ####################################################
 
     rec_obj = sf.MyMessage(c.TYPE_REC, record_time)
     send_to_client(c.LEFT_CLIENT, rec_obj)
-    send_to_client(c.RIGHT_CLIENT, rec_obj)
+    ####################################################
+    # send_to_client(c.RIGHT_CLIENT, rec_obj)
+    ####################################################
 
     while True:
         message_list.extend(read_all_client_messages())
