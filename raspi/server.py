@@ -300,6 +300,8 @@ j = 0
 
 if __name__ == "__main__":
     initialise()
+    time.sleep(2)
+    print('initialised')
     
     while True:
         time.sleep(1/1000)
