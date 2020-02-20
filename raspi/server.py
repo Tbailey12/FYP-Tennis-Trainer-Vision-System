@@ -15,6 +15,9 @@ import socket_funcs as sf
 import camera_calibration as cal
 import stereo_calibration as s_cal
 
+import multiprocessing as mp
+import queue
+
 debug = c.DEBUG
 
 
@@ -74,6 +77,16 @@ def read_all_client_messages():
         # read_sockets, _, exception_sockets = select.select(sockets_list, [], sockets_list, 0)
         return message_list
     return []
+
+def search_for_chessboards(chessboards_found, chessboards, left_frame, right_frame):
+    left_chessboard = cal.find_chessboards(left_frame)
+    if left_chessboard:
+        right_chessboard = cal.find_chessboards(right_frame)
+    if left_chessboard and right_chessboard:
+        chessboards.put((left_chessboard[0], right_chessboard[0]))
+        chessboards_found.value += 1
+        print('chessboard found')
+    return
 
 def server_help():
     helpstring = '''
@@ -141,24 +154,32 @@ def record(stereo_calib = None, record_time = c.REC_T):
                 print(f"unknown message format for recording: {message_list[pos]['data'].type}")
             pos+=1
 
-def stream(time = c.CALIB_T, calibrate = False, display = False):
+def stream(run_time = c.CALIB_T, calibrate = False, display = False, timeout = False):
     message_list = []
     left_stream_imgs = []
     right_stream_imgs = []
+    left_chessboards = []
+    right_chessboards = []
+    chessboards = mp.Queue()
+    chessboard_searchers = []
     pos = 0
     left_done = False
     right_done = False
     disp_n_frame = 0
+    cal_n_frame = 0
     img_size = None
     done = False
-    stopframe = int(time*c.FRAMERATE)
+    stopframe = int(run_time*c.FRAMERATE)
+    chessboards_found = mp.Value('i',0)
 
     rec_obj = sf.MyMessage(c.TYPE_STREAM, c.CALIB_IMG_DELAY)
     send_to_client(c.LEFT_CLIENT, rec_obj)
-
-    ####################################################
     send_to_client(c.RIGHT_CLIENT, rec_obj)
-    ####################################################
+
+    if calibrate:
+        # load camera intrinsic calibration data 
+        left_cal = cal.load_params(c.LEFT_CALIB_F)
+        right_cal = cal.load_params(c.RIGHT_CALIB_F)
 
     while True:
         message_list.extend(read_all_client_messages())
@@ -184,13 +205,31 @@ def stream(time = c.CALIB_T, calibrate = False, display = False):
                             disp_frame = cv.hconcat([left_stream_imgs[disp_n_frame][1],right_stream_imgs[disp_n_frame][1]])
                             cv.imshow(f"stream", disp_frame)
                             cv.waitKey(1)
-                            if left_stream_imgs[disp_n_frame][0] >=stopframe:
+                            if left_stream_imgs[disp_n_frame][0] >=stopframe and timeout:
                                 done_obj = sf.MyMessage(c.TYPE_DONE, 1)
                                 send_to_client(c.LEFT_CLIENT, done_obj)
                                 send_to_client(c.RIGHT_CLIENT, done_obj)
+                                done = True
                                 cv.destroyAllWindows()
                             
                             disp_n_frame += 1
+
+                    # look for chessboards
+                    if calibrate:
+                        if (len(left_stream_imgs) > cal_n_frame) and (len(right_stream_imgs) > cal_n_frame):
+                            chessboard_search = mp.Process(target = search_for_chessboards, args=(chessboards_found, chessboards, [left_stream_imgs[cal_n_frame]], [right_stream_imgs[cal_n_frame]]))
+                            chessboard_search.start()
+                            chessboard_searchers.append(chessboard_search)
+                            cal_n_frame += 1
+
+                    if chessboards_found.value >= c.MIN_PATTERNS:
+                        done_obj = sf.MyMessage(c.TYPE_DONE, 1)
+                        send_to_client(c.LEFT_CLIENT, done_obj)
+                        send_to_client(c.RIGHT_CLIENT, done_obj)
+                        if display: 
+                            done = True
+                            cv.destroyAllWindows()
+
                 # when both clients send the done message, they are finished collecting frames
                 elif (message_list[pos]['data'].type == c.TYPE_DONE):
                     if message_list[pos]['client'] == c.LEFT_CLIENT:
@@ -198,7 +237,38 @@ def stream(time = c.CALIB_T, calibrate = False, display = False):
                     elif message_list[pos]['client'] == c.RIGHT_CLIENT:
                         right_done = True
                     if left_done and right_done:
-                        return True
+                        if calibrate and chessboards_found.value >= c.MIN_PATTERNS:
+                            # for searcher in chessboard_searchers:
+                            #     searcher.join()
+                            while True:
+                                try:
+                                    left_chessboard, right_chessboard = chessboards.get_nowait()
+                                    left_chessboards.append(left_chessboard)
+                                    right_chessboards.append(right_chessboard)
+                                except queue.Empty:
+                                    if chessboards.qsize() == 0:
+                                        break
+
+                            # # check all chessboards are valid in both images
+                            # s_cal.validate_chessboards(left_chessboards, right_chessboards)
+                            # calibrated stereo cameras
+                            RMS, cameraMatrix1, distCoeffs1, cameraMatrix2, distCoeffs2, R, T, E, F = s_cal.calibrate_stereo(
+                                left_chessboards, right_chessboards, left_cal, right_cal, img_size)
+    
+                            # obtain stereo rectification projection matrices
+                            R1, R2, P1, P2, Q, validPixROI1, validPixROI2 = cv.stereoRectify(cameraMatrix1, distCoeffs1,
+                                                        cameraMatrix2, distCoeffs2, img_size, R, T)
+
+                            # save all calibration params to object
+                            stereo_calib =  s_cal.StereoCal(RMS, cameraMatrix1, distCoeffs1, cameraMatrix2, distCoeffs2, R, T, E, F,
+                                                        R1, R2, P1, P2, Q, validPixROI1, validPixROI2)
+
+                            stereo_calib.save_params(c.STEREO_CALIB_F)
+                            print('calibration complete')
+                            print(Q)
+                            return stereo_calib
+                        else:
+                            return True
                 pos += 1
 
 
@@ -310,7 +380,7 @@ if __name__ == "__main__":
         if cmd == "help":
             print(server_help())
         elif cmd == "stream":
-            stream(time=10, calibrate=False, display=True)
+            stream(run_time=10, calibrate=True, display=True)
         elif cmd == "record":
             record()
         elif cmd == "shutdown":

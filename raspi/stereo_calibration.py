@@ -26,11 +26,11 @@ class StereoCal(object):
 		self.validPixROI1 = validPixROI1
 		self.validPixROI2 = validPixROI2
 
-	def save_params(filename):
+	def save_params(self, filename):
 	    with open(filename, 'wb') as f:
 	        np.savez(f, rms = self.rms, cameraMatrix1 = self.cameraMatrix1, distCoeffs1 = self.distCoeffs1, cameraMatrix2 = self.cameraMatrix2, distCoeffs2 = self.distCoeffs2, R = self.R, T = self.T, E = self.E, F = self.F, R1 = self.R1, R2 = self.R2, P1 = self.P1, P2 = self.P2, Q = self.Q, validPixROI1 = self.validPixROI1, validPixROI2 = self.validPixROI2)
 
-	def load_params(filename):
+	def load_params(self, filename):
 	    with open(filename, 'rb') as f:
 	        myfile = np.load(f)
 	        cam_cal = CamCal(myfile['rms'], myfile['cameraMatrix1'], myfile['distCoeffs1'], myfile['cameraMatrix2'], myfile['distCoeffs2'], myfile['R'], myfile['T'], myfile['E'], myfile['F'], myfile['R1'], myfile['R2'], myfile['P1'], myfile['P2'], myfile['Q'], myfile['validPixROI1'], myfile['validPixROI2'])

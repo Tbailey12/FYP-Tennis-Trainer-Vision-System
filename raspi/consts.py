@@ -54,7 +54,7 @@ STATE_CALIBRATION = "calibration"
 sensor_size = (3.68, 2.76)	# size of the image sensor on the camera
 square_size = 23.4E-3		# size of squares on the chessboard
 pattern_size = (9, 6)  		# number of points (where the black and white intersects)
-MIN_PATTERNS = 8
+MIN_PATTERNS = 10
 
 ## -- Filename consts -- ##
 STEREO_CALIB_F = 'stereo_calib.npy'
