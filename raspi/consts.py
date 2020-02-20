@@ -15,7 +15,7 @@ PORT = 1234
 
 CHUNK_SIZE = 4096
 REC_T = 1			# default recording time
-CALIB_NUM_IMG = 10  # number of calibration images to take
+CALIB_T = 10  # number of calibration images to take
 CALIB_IMG_DELAY = 1 # seconds between each image
 # CALIB_T = 10		# 10 seconds for calibration to take images
 
@@ -40,7 +40,7 @@ TYPE_IMG = "img"
 TYPE_BALLS = "balls"
 TYPE_DONE = "done"
 TYPE_SHUTDOWN = "shutdown"
-TYPE_CALIB = "calibration"
+TYPE_STREAM = "stream"
 
 ## -- State definitions -- ##
 STATE_IDLE = "idle"

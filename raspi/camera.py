@@ -59,11 +59,16 @@ def ImageProcessor(unprocessed_frames, processed_frames, proc_complete, event_ma
             if event_manager.recording.is_set():
                 proc_complete.clear()
                 processing = True
-            # if not calibration.is_set():
-            #     processing = True
-            #     proc_complete.clear()
-            # else:
-            #     proc_complete.set()
+            elif event_manager.record_stream.is_set():
+                try:
+                    # get the frames from queue
+                    n_frame, frame_buf = unprocessed_frames.get_nowait()
+                    # y_data is a numpy array hxw with 8 bit greyscale brightness values
+                    y_data = np.frombuffer(frame_buf, dtype=np.uint8, count=w*h).reshape((h,w))
+                    
+                    processed_frames.put((n_frame, y_data))
+                except queue.Empty:
+                    pass
         else:
             try:
                 # get the frames from queue
@@ -104,6 +109,11 @@ class FrameController(object):
         if self.event_manager.recording.is_set():
             self.unprocessed_frames.put((self.n_frame, buf))    # add the new frame to the queue
             self.n_frame += 1
+        elif self.event_manager.record_stream.is_set():
+            if self.n_frame%n_calib.value == 0:
+                self.unprocessed_frames.put((self.n_frame, buf))    # add the new frame to the queue
+            self.n_frame += 1
+
         else:
             self.n_frame = 0
 
@@ -240,8 +250,8 @@ class LED(object):
 
 def record(r_led, g_led, event_manager, processing_complete, processed_frames):
     print('recording')
-    g_led.Update(100)
-    r_led.Update(1)
+    g_led.Update(100, force=True)
+    r_led.Update(1, force=True)
     processing_complete.wait()
     processing_complete.clear()
     event_manager.update(recording)
@@ -269,6 +279,48 @@ def record(r_led, g_led, event_manager, processing_complete, processed_frames):
         message = sf.MyMessage(c.TYPE_DONE, False)
     sf.send_message(client.client_socket, message, c.CLIENT)
     return
+
+def stream(r_led, g_led, event_manager, processing_complete, processed_frames):
+    print('recording stream')
+    message_list = []
+    g_led.Update(1, force=True)
+    r_led.Update(1, force=True)
+    processing_complete.wait()
+    event_manager.update(record_stream)
+    errors = 0
+
+    while True:
+        try:
+            # get the frames from queue
+            n_frame, frame_buf = processed_frames.get_nowait()
+            
+            if event_manager.record_stream.is_set():
+                print(f"calib: {n_frame}")
+                # y_data is a numpy array hxw with 8 bit greyscale brightness values
+                y_data = np.frombuffer(frame_buf, dtype=np.uint8, count=w*h).reshape((h,w))
+                message = sf.MyMessage(c.TYPE_IMG, (n_frame, y_data))
+                if not sf.send_message(client.client_socket, message, c.CLIENT):
+                    errors += 1
+                    print(f"error: {errors}")
+
+                message_list.extend(client.read_all_server_messages())
+                for message in message_list:
+                    if message['data'].type == c.TYPE_DONE:
+                        event_manager.clear()
+
+        except queue.Empty:
+            if not event_manager.record_stream.is_set() and processed_frames.qsize() == 0:  # if the recording has finished
+                print('done')
+                break
+
+    # if there were no transmission errors send True, else send False
+    if errors == 0:
+        message = sf.MyMessage(c.TYPE_DONE, True)
+    else:
+        message = sf.MyMessage(c.TYPE_DONE, False)
+
+    sf.send_message(client.client_socket, message, c.CLIENT)
+
 
 
 def shutdown_prog(r_led, g_led, shutdown):
@@ -331,18 +383,15 @@ if __name__ == "__main__":
                             t_record.value = c.REC_T
                         record(r_led, g_led, event_manager, processing_complete, processed_frames)
                         break
-                    # elif message['data'].type == c.TYPE_CALIB:
-                    #     cal_message = message['data'].message
+                    elif message['data'].type == c.TYPE_STREAM:
+                        n_calib.value = int(c.FRAMERATE*message['data'].message)
+                        stream(r_led, g_led, event_manager, processing_complete, processed_frames)
+                        break
 
-                    #     n_calib.value = int(c.FRAMERATE*cal_message.img_delay)
-                    #     t_record.value = int(cal_message.img_delay*cal_message.num_img)
-                        
-                    #     message_list = []
-                    #     state = c.STATE_CALIBRATION
-                    #     break
                     elif message['data'].type == c.TYPE_SHUTDOWN:
                         shutdown_prog(r_led, g_led, event_manager)
-                except:
+                except Exception as e:
+                    print(e)
                     print('unrecognised message type')
                     continue
 

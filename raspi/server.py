@@ -88,7 +88,7 @@ def initialise():
     left_connected = False
     right_connected = False
     ####################################################
-    right_connected = True
+    # right_connected = True
     ####################################################
 
     while True:
@@ -119,8 +119,8 @@ def record(stereo_calib = None, record_time = c.REC_T):
 
     rec_obj = sf.MyMessage(c.TYPE_REC, record_time)
     send_to_client(c.LEFT_CLIENT, rec_obj)
+    send_to_client(c.RIGHT_CLIENT, rec_obj)
     ####################################################
-    # send_to_client(c.RIGHT_CLIENT, rec_obj)
     ####################################################
 
     while True:
@@ -141,6 +141,67 @@ def record(stereo_calib = None, record_time = c.REC_T):
                 print(f"unknown message format for recording: {message_list[pos]['data'].type}")
             pos+=1
 
+def stream(time = c.CALIB_T, calibrate = False, display = False):
+    message_list = []
+    left_stream_imgs = []
+    right_stream_imgs = []
+    pos = 0
+    left_done = False
+    right_done = False
+    disp_n_frame = 0
+    img_size = None
+    done = False
+    stopframe = int(time*c.FRAMERATE)
+
+    rec_obj = sf.MyMessage(c.TYPE_STREAM, c.CALIB_IMG_DELAY)
+    send_to_client(c.LEFT_CLIENT, rec_obj)
+
+    ####################################################
+    send_to_client(c.RIGHT_CLIENT, rec_obj)
+    ####################################################
+
+    while True:
+        message_list.extend(read_all_client_messages())
+        if len(message_list) > 0:
+            while pos < len(message_list):
+                # when the clients send an image during calibration
+                if (message_list[pos]['data'].type == c.TYPE_IMG) and not done:
+                    n_frame = message_list[pos]['data'].message[0]
+                    print(n_frame)
+                    y_data = message_list[pos]['data'].message[1]
+                    if img_size is None:
+                        (h,w) = y_data.shape[:2]
+                        img_size = (w,h)
+                    # add the img to the corresponding calibration img list
+                    if message_list[pos]['client'] == c.LEFT_CLIENT:
+                        left_stream_imgs.append((n_frame, y_data))
+                    elif message_list[pos]['client'] == c.RIGHT_CLIENT:                    
+                        right_stream_imgs.append((n_frame, y_data))
+                    # cv.imwrite(f"{message_list[last_len]['client']}{n_frame}.png",y_data)
+
+                    if display:
+                        if (len(left_stream_imgs) > disp_n_frame) and (len(right_stream_imgs) > disp_n_frame): 
+                            disp_frame = cv.hconcat([left_stream_imgs[disp_n_frame][1],right_stream_imgs[disp_n_frame][1]])
+                            cv.imshow(f"stream", disp_frame)
+                            cv.waitKey(1)
+                            if left_stream_imgs[disp_n_frame][0] >=stopframe:
+                                done_obj = sf.MyMessage(c.TYPE_DONE, 1)
+                                send_to_client(c.LEFT_CLIENT, done_obj)
+                                send_to_client(c.RIGHT_CLIENT, done_obj)
+                                cv.destroyAllWindows()
+                            
+                            disp_n_frame += 1
+                # when both clients send the done message, they are finished collecting frames
+                elif (message_list[pos]['data'].type == c.TYPE_DONE):
+                    if message_list[pos]['client'] == c.LEFT_CLIENT:
+                        left_done = True
+                    elif message_list[pos]['client'] == c.RIGHT_CLIENT:
+                        right_done = True
+                    if left_done and right_done:
+                        return True
+                pos += 1
+
+
 def calibrate():
     message_list = []
     left_calib_imgs = []
@@ -150,10 +211,12 @@ def calibrate():
     right_done = False
     img_size = None
 
-    cal_message = sf.CalMessage(num_img = 1, img_delay=1)
-    rec_obj = sf.MyMessage(c.TYPE_CALIB, cal_message)
+    rec_obj = sf.MyMessage(c.TYPE_STREAM, c.CALIB_IMG_DELAY)
     send_to_client(c.LEFT_CLIENT, rec_obj)
-    send_to_client(c.RIGHT_CLIENT, rec_obj)
+
+    ####################################################
+    # send_to_client(c.RIGHT_CLIENT, rec_obj)
+    ####################################################
 
     while True:
         message_list.extend(read_all_client_messages())
@@ -244,8 +307,8 @@ if __name__ == "__main__":
         cmd = input("Enter server cmd: ")
         if cmd == "help":
             print(server_help())
-        elif cmd == "calibrate":
-            calibrate()
+        elif cmd == "stream":
+            stream(time=10, calibrate=False, display=True)
         elif cmd == "record":
             record()
         elif cmd == "shutdown":
