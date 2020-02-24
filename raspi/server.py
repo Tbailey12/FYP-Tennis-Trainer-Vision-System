@@ -85,7 +85,7 @@ def search_for_chessboards(chessboards_found, chessboards, left_frame, right_fra
     if left_chessboard and right_chessboard:
         chessboards.put((left_chessboard[0], right_chessboard[0]))
         chessboards_found.value += 1
-        print('chessboard found')
+        print(f'chessboards found {chessboards_found.value}')
     return
 
 def server_help():
@@ -180,7 +180,6 @@ def stream(run_time = c.CALIB_T, calibrate = False, display = False, timeout = F
         # load camera intrinsic calibration data 
         left_cal = cal.load_params(c.LEFT_CALIB_F)
         right_cal = cal.load_params(c.RIGHT_CALIB_F)
-
     while True:
         message_list.extend(read_all_client_messages())
         if len(message_list) > 0:
@@ -250,7 +249,7 @@ def stream(run_time = c.CALIB_T, calibrate = False, display = False, timeout = F
                                         break
 
                             # # check all chessboards are valid in both images
-                            # s_cal.validate_chessboards(left_chessboards, right_chessboards)
+                            s_cal.validate_chessboards(left_chessboards, right_chessboards)
                             # calibrated stereo cameras
                             RMS, cameraMatrix1, distCoeffs1, cameraMatrix2, distCoeffs2, R, T, E, F = s_cal.calibrate_stereo(
                                 left_chessboards, right_chessboards, left_cal, right_cal, img_size)
@@ -264,87 +263,11 @@ def stream(run_time = c.CALIB_T, calibrate = False, display = False, timeout = F
                                                         R1, R2, P1, P2, Q, validPixROI1, validPixROI2)
 
                             stereo_calib.save_params(c.STEREO_CALIB_F)
-                            print('calibration complete')
-                            print(Q)
+                            print(f'calibration complete, rms: {RMS}')
                             return stereo_calib
                         else:
-                            return True
+                            return None
                 pos += 1
-
-
-def calibrate():
-    message_list = []
-    left_calib_imgs = []
-    right_calib_imgs = []
-    pos = 0
-    left_done = False
-    right_done = False
-    img_size = None
-
-    rec_obj = sf.MyMessage(c.TYPE_STREAM, c.CALIB_IMG_DELAY)
-    send_to_client(c.LEFT_CLIENT, rec_obj)
-
-    ####################################################
-    # send_to_client(c.RIGHT_CLIENT, rec_obj)
-    ####################################################
-
-    while True:
-        message_list.extend(read_all_client_messages())
-        if len(message_list) > 0:
-            while pos < len(message_list):
-                # when the clients send an image during calibration
-                if (message_list[pos]['data'].type == c.TYPE_IMG):
-                    n_frame = message_list[pos]['data'].message[0]
-                    print(n_frame)
-                    y_data = message_list[pos]['data'].message[1]
-                    if img_size is None:
-                        (h,w) = y_data.shape[:2]
-                        img_size = (w,h)
-                    # add the img to the corresponding calibration img list
-                    if message_list[pos]['client'] == c.LEFT_CLIENT:
-                        left_calib_imgs.append((n_frame, y_data))
-                    elif message_list[pos]['client'] == c.RIGHT_CLIENT:                    
-                        right_calib_imgs.append((n_frame, y_data))
-                    # cv.imwrite(f"{message_list[last_len]['client']}{n_frame}.png",y_data)
-
-                # when both clients send the done message, they are finished collecting frames
-                elif (message_list[pos]['data'].type == c.TYPE_DONE):
-                    if message_list[pos]['client'] == c.LEFT_CLIENT:
-                        left_done = True
-                    elif message_list[pos]['client'] == c.RIGHT_CLIENT:
-                        right_done = True
-                    if left_done and right_done:
-                        left_done = False
-                        right_done = False
-                        # load camera intrinsic calibration data 
-                        left_cal = cal.load_params(c.LEFT_CALIB_F)
-                        right_cal = cal.load_params(c.RIGHT_CALIB_F)
-
-                        left_chessboards = cal.find_chessboards(left_calib_imgs)
-                        right_chessboards = cal.find_chessboards(right_calib_imgs)
-
-                        s_cal.validate_chessboards(left_chessboards, right_chessboards)
-
-                        if len(left_chessboards) < c.MIN_PATTERNS:
-                            print('not enough chessboards were found, aborting calibration')
-                            return False
-                        else:
-                            # calibrated stereo cameras
-                            RMS, cameraMatrix1, distCoeffs1, cameraMatrix2, distCoeffs2, R, T, E, F = s_cal.calibrate_stereo(
-                                left_chessboards, right_chessboards, left_cal, right_cal, img_size)
-    
-                            # obtain stereo rectification projection matrices
-                            R1, R2, P1, P2, Q, validPixROI1, validPixROI2 = cv.stereoRectify(cameraMatrix1, distCoeffs1,
-                                                        cameraMatrix2, distCoeffs2, img_size, R, T)
-
-                            # save all calibration params to object
-                            stereo_calib =  s_cal.StereoCal(RMS, cameraMatrix1, distCoeffs1, cameraMatrix2, distCoeffs2, R, T, E, F,
-                                                        R1, R2, P1, P2, Q, validPixROI1, validPixROI2)
-
-                            stereo_calib.save_params(c.STEREO_CALIB_F)
-                            print('calibration complete')
-                            return stereo_calib
-                pos+=1
 
 def shutdown():
     print('shutting down')
@@ -361,17 +284,17 @@ server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)  # allows us
 server_socket.bind((c.IP, c.PORT))
 server_socket.listen()
 
-print("Server started")
-
 sockets_list = [server_socket]  # list of sockets, init with server socket
 clients = {}  # list of clients
 
 j = 0
 
 if __name__ == "__main__":
+    print("Server started")
     initialise()
     time.sleep(2)
     print('initialised')
+    stereo_calib = s_cal.StereoCal()
     
     while True:
         time.sleep(1/1000)
@@ -379,12 +302,31 @@ if __name__ == "__main__":
         cmd = input("Enter server cmd: ")
         if cmd == "help":
             print(server_help())
+        if cmd == "calibrate":
+            while True:
+                cmd = input("Load existing calibration? (y/n)")
+                if cmd == "y":
+                    stereo_calib.load_params(c.STEREO_CALIB_F)
+                    break
+                elif cmd == "n":
+                    cal_result = stream(run_time=10, calibrate=True, display=True, timeout=10)
+                    if cal_result:
+                        stereo_calib = cal_result
+                    break
+                else:
+                    print(f"{cmd} is not a valid cmd, please try again")
+
         elif cmd == "stream":
-            stream(run_time=10, calibrate=True, display=True)
+            stream(run_time=10, calibrate=False, display=True, timeout=True)
         elif cmd == "record":
-            record()
+            if stereo_calib.rms is None:
+                print("calibration must be conducted before recording")
+            else:
+                record()
         elif cmd == "shutdown":
             shutdown()
+        else:
+            print(f"{cmd} is not a valid command, enter 'help' to see command list")
         continue
 
         # elif state == c.STATE_CALIBRATION:

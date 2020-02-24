@@ -8,7 +8,7 @@ import consts as c
 import camera_calibration as cal
 
 class StereoCal(object):
-	def __init__(self, rms, cameraMatrix1, distCoeffs1, cameraMatrix2, distCoeffs2, R, T, E, F, R1, R2, P1, P2, Q, validPixROI1, validPixROI2):
+	def __init__(self, rms = None, cameraMatrix1 = None, distCoeffs1 = None, cameraMatrix2 = None, distCoeffs2 = None, R = None, T = None, E = None, F = None, R1 = None, R2 = None, P1 = None, P2 = None, Q = None, validPixROI1 = None, validPixROI2 = None):
 		self.rms = rms
 		self.cameraMatrix1 = cameraMatrix1
 		self.distCoeffs1 = distCoeffs1
@@ -31,11 +31,33 @@ class StereoCal(object):
 	        np.savez(f, rms = self.rms, cameraMatrix1 = self.cameraMatrix1, distCoeffs1 = self.distCoeffs1, cameraMatrix2 = self.cameraMatrix2, distCoeffs2 = self.distCoeffs2, R = self.R, T = self.T, E = self.E, F = self.F, R1 = self.R1, R2 = self.R2, P1 = self.P1, P2 = self.P2, Q = self.Q, validPixROI1 = self.validPixROI1, validPixROI2 = self.validPixROI2)
 
 	def load_params(self, filename):
-	    with open(filename, 'rb') as f:
-	        myfile = np.load(f)
-	        cam_cal = CamCal(myfile['rms'], myfile['cameraMatrix1'], myfile['distCoeffs1'], myfile['cameraMatrix2'], myfile['distCoeffs2'], myfile['R'], myfile['T'], myfile['E'], myfile['F'], myfile['R1'], myfile['R2'], myfile['P1'], myfile['P2'], myfile['Q'], myfile['validPixROI1'], myfile['validPixROI2'])
-	        return cam_cal
-	    return None
+		try:
+		    with open(filename, 'rb') as f:
+		        myfile = np.load(f)
+		        cam_cal = StereoCal(myfile['rms'], myfile['cameraMatrix1'], myfile['distCoeffs1'], myfile['cameraMatrix2'], myfile['distCoeffs2'], myfile['R'], myfile['T'], myfile['E'], myfile['F'], myfile['R1'], myfile['R2'], myfile['P1'], myfile['P2'], myfile['Q'], myfile['validPixROI1'], myfile['validPixROI2'])
+		        print(f"{filename} loaded successfully")
+		        self.rms = myfile['rms']
+		        self.cameraMatrix1 = myfile['cameraMatrix1']
+		        self.distCoeffs1 = myfile['distCoeffs1']
+		        self.cameraMatrix2 = myfile['cameraMatrix2']
+		        self.distCoeffs2 = myfile['distCoeffs2']
+		        self.R = myfile['R']
+		        self.T = myfile['T']
+		        self.E = myfile['E']
+		        self.F = myfile['F']
+		        self.R1 = myfile['R1']
+		        self.R2 = myfile['R2']
+		        self.P1 = myfile['P1']
+		        self.P2 = myfile['P2']
+		        self.Q = myfile['Q']				
+		        self.validPixROI1 = myfile['validPixROI1']				
+		        self.validPixROI2 = myfile['validPixROI2']
+		        return cam_cal
+
+		except OSError:
+			print(f"{filename} does not exist")
+
+		return None
 
 def process_image(img_data, pattern_points):
     n_frame, img = img_data

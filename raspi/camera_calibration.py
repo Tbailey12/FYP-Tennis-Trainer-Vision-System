@@ -45,7 +45,7 @@ def process_image(img_data, pattern_points):
         return None
 
     # print message if file contains chessboard
-    print('%s... OK' % n_frame)
+    # print('%s... OK' % n_frame)
     return (n_frame, corners.reshape(-1, 2), pattern_points)
 
 def generate_pattern_points():
