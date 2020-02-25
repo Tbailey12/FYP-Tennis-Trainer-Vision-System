@@ -317,6 +317,9 @@ if __name__ == "__main__":
                     print(f"{cmd} is not a valid cmd, please try again")
 
         elif cmd == "stream":
+            ########## FOR TESTING ##############
+            stereo_calib.load_params(c.STEREO_CALIB_F)
+            ########## FOR TESTING ##############
             stream(run_time=10, calibrate=False, display=True, timeout=True)
         elif cmd == "record":
             if stereo_calib.rms is None:

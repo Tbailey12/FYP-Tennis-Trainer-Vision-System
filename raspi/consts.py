@@ -22,6 +22,8 @@ CALIB_IMG_DELAY = 1 # seconds between each image
 ## -- Camera consts -- ##
 FRAMERATE = 90
 
+LEARNING_RATE = 0.1
+
 ## -- LED consts -- ##
 LED_F_MAX = 60		# max LED frequency
 LED_F_MIN = 0.5		# min LED frequency
