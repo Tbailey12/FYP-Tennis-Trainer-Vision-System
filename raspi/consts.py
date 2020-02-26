@@ -11,7 +11,7 @@ SOCKET_TIMEOUT = 5
 HEADER_LENGTH = 24
 IP = "192.168.20.9"		# server IP address
 # IP = "127.0.0.1"
-PORT = 1234
+PORT = 1234 
 
 CHUNK_SIZE = 4096
 REC_T = 1			# default recording time

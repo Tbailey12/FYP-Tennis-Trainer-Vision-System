@@ -127,7 +127,7 @@ def record(stereo_calib = None, record_time = c.REC_T):
     left_done = False
     right_done = False
     ####################################################
-    right_done = True
+    # right_done = True
     ####################################################
 
     rec_obj = sf.MyMessage(c.TYPE_REC, record_time)
@@ -140,7 +140,7 @@ def record(stereo_calib = None, record_time = c.REC_T):
         message_list.extend(read_all_client_messages())
         while pos < len(message_list):
             if message_list[pos]['data'].type == c.TYPE_BALLS:
-                print(message_list[pos]['data'].message[0][0])
+                print(message_list[pos]['data'].message[0])
 
             elif message_list[pos]['data'].type == c.TYPE_DONE:
                 if message_list[pos]['client'] == c.LEFT_CLIENT:
@@ -322,6 +322,9 @@ if __name__ == "__main__":
             ########## FOR TESTING ##############
             stream(run_time=10, calibrate=False, display=True, timeout=True)
         elif cmd == "record":
+            ########## FOR TESTING ##############
+            stereo_calib.load_params(c.STEREO_CALIB_F)
+            ########## FOR TESTING ##############
             if stereo_calib.rms is None:
                 print("calibration must be conducted before recording")
             else:

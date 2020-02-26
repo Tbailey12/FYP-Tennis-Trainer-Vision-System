@@ -18,12 +18,16 @@ import socket_funcs as sf
 
 import RPi.GPIO as GPIO
 
+from skimage import measure
+from scipy import ndimage
+
 ## -- camera settings -- ##
 # w,h = (1280,720)
 w,h = (640,480)
 resolution = w,h
 framerate = c.FRAMERATE
-n_processors = 3    # number of processors to use for CV
+n_processors = 4    # number of processors to use for CV
+background_rate = 10
 
 client_name = c.LEFT_CLIENT
 
@@ -49,15 +53,16 @@ class EventManager(object):
         for event in self.events:
             event.clear()
 
-def ImageProcessor(unprocessed_frames, processed_frames, proc_complete, event_manager):
+def ImageProcessor(unprocessed_frames, processed_frames, proc_complete, event_manager, n_calib):
     processing = False
     proc_complete.set()
 
     img_mean = None
     img_std = None
 
-    B = None
     A = None
+    B = None
+    B_old = None
     C = None
 
     mean_1 = None
@@ -76,91 +81,102 @@ def ImageProcessor(unprocessed_frames, processed_frames, proc_complete, event_ma
     B_2_mean = None
     B_less = None
 
+    kernel = np.array([ [0,1,0],
+                        [1,1,1],
+                        [0,1,0]], dtype=np.uint8)
+
+    last_n_frame = 0
+
     p = c.LEARNING_RATE
 
     time_cumulative = 0
-    counter = 0
 
     while True:
-        try:             
+        try:
             # get the frames from queue
-            n_frame, frame_buf = unprocessed_frames.get_nowait()
-            counter+=1
+            n_frame, n_frame_2, frame_buf = unprocessed_frames.get_nowait()
+            # print(f"{n_frame}:{n_frame_2}")
+            
             # y_data is a numpy array hxw with 8 bit greyscale brightness values
             y_data = np.frombuffer(frame_buf, dtype=np.uint8, count=w*h).reshape((h,w)).astype(np.float32)
 
-            start = time.time_ns()
+            # every 3 frames update the background
+            if n_frame_2 > (last_n_frame+background_rate) and not event_manager.event_change.is_set():
+                last_n_frame = n_frame_2
+                if img_mean is None:
+                    print('nomean')
+                    img_mean = y_data
+                    img_std = np.ones(y_data.shape, dtype=np.float32)
 
-            if img_mean is None:
-                img_mean = y_data
-                img_std = np.zeros(y_data.shape, dtype=np.float32)
+                    A = np.zeros(y_data.shape)
+                    B = np.zeros(y_data.shape)
+                    B_old = np.zeros(y_data.shape)
+                    C = np.zeros(y_data.shape)
 
-                p = 0.1 # learning rate
-                B = np.zeros(y_data.shape)
-                A = np.zeros(y_data.shape)
-                C = np.zeros(y_data.shape)
+                    mean_1 = np.zeros(y_data.shape)
+                    mean_2 = np.zeros(y_data.shape)
 
-                mean_1 = np.zeros(y_data.shape)
-                mean_2 = np.zeros(y_data.shape)
+                    std_1 = np.zeros(y_data.shape)
+                    std_2 = np.zeros(y_data.shape)
+                    std_3 = np.zeros(y_data.shape)
+                    std_4 = np.zeros(y_data.shape)
+                    std_5 = np.zeros(y_data.shape)
+                    std_6 = np.zeros(y_data.shape)
 
-                std_1 = np.zeros(y_data.shape)
-                std_2 = np.zeros(y_data.shape)
-                std_3 = np.zeros(y_data.shape)
-                std_4 = np.zeros(y_data.shape)
-                std_5 = np.zeros(y_data.shape)
-                std_6 = np.zeros(y_data.shape)
+                    B_1_std = np.zeros(y_data.shape)
+                    B_1_mean = np.zeros(y_data.shape)
+                    B_greater = np.zeros(y_data.shape)
+                    B_2_mean = np.zeros(y_data.shape)
+                    B_less = np.zeros(y_data.shape)
 
-                B_1_std = np.zeros(y_data.shape)
-                B_1_mean = np.zeros(y_data.shape)
-                B_greater = np.zeros(y_data.shape)
-                B_2_mean = np.zeros(y_data.shape)
-                B_less = np.zeros(y_data.shape)
+                # img_mean = (1 - p) * img_mean + p * y_data  # calculate mean
+                np.multiply(1-p,img_mean,out=mean_1)
+                np.multiply(p,y_data,out=mean_2)
+                np.add(mean_1,mean_2,out=img_mean)
+                
+                # img_std = np.sqrt((1 - p) * (img_std ** 2) + p * ((y_data - img_mean) ** 2))  # calculate std deviation
+                np.square(img_std,out=std_1)
+                np.multiply(1-p,std_1,out=std_2)
+                np.subtract(y_data,img_mean,out=std_3)
+                np.square(std_3,out=std_4)
+                np.multiply(p,std_4,out=std_5)
+                np.add(std_2,std_5,out=std_6)
+                np.sqrt(std_6,out=img_std)
 
-            mid = time.time_ns()
-            # img_mean = (1 - p) * img_mean + p * y_data  # calculate mean
-            np.multiply(1-p,img_mean,out=mean_1)
-            np.multiply(p,y_data,out=mean_2)
-            np.add(mean_1,mean_2,out=img_mean)
-            
+                print(f"std: {np.mean(img_std)}")
+                print(F"mean: {np.mean(img_mean)}")
 
-            mid = time.time_ns()
-            # img_std = np.sqrt((1 - p) * (img_std ** 2) + p * ((y_data - img_mean) ** 2))  # calculate std deviation
-            np.square(img_std,out=std_1)
-            np.multiply(1-p,std_1,out=std_2)
-            np.subtract(y_data,img_mean,out=std_3)
-            np.square(std_3,out=std_4)
-            np.multiply(p,std_4,out=std_5)
-            np.add(std_2,std_5,out=std_6)
-            np.sqrt(std_6,out=img_std)
+            if not proc_complete.is_set() and n_frame > -1:
+                start = time.time_ns()
+                B_old = np.copy(B)
+                # B = np.logical_or((y_data > (img_mean + 2*img_std)),
+                                  # (y_data < (img_mean - 2*img_std)))  # foreground new
+                np.multiply(img_std,3,out=B_1_std)
+                np.add(B_1_std,img_mean,out=B_1_mean)
+                B_greater = np.greater(y_data,B_1_mean)
+                np.subtract(img_mean,B_1_std,out=B_2_mean)
+                B_less = np.less(y_data,B_2_mean)
+                B = np.logical_or(B_greater,B_less)
 
-            B_old = B
-            # B = np.logical_or((y_data > (img_mean + 2*img_std)),
-                              # (y_data < (img_mean - 2*img_std)))  # foreground new
-            np.multiply(img_std,2,out=B_1_std)
-            np.add(B_1_std,img_mean,out=B_1_mean)
-            B_greater = np.greater(y_data,B_1_mean)
-            np.subtract(img_mean,B_1_std,out=B_2_mean)
-            B_less = np.less(y_data,B_2_mean)
-            B = np.logical_or(B_greater,B_less)
+                A = ~np.logical_and(B_old, B)  # difference between prev foreground and new foreground
+                C = np.logical_and(A, B)   # different from previous frame and part of new frame
+                C = 255*C.astype(np.uint8)
 
-            A = ~np.logical_and(B_old, B)  # difference between prev foreground and new foreground
-            C = np.logical_and(A, B)   # different from previous frame and part of new frame
+                C = cv2.morphologyEx(C, cv2.MORPH_OPEN, kernel)
 
-            time_cumulative+=(time.time_ns() - start)/1E6
-            if counter %20 == 0:
-                print(f"avg_fps: {n_frame/(time_cumulative/1000)}")
+                cv2.imwrite(f"{n_frame:04d}.png",C)
 
-            if event_manager.recording.is_set():
-                    proc_complete.clear()
+                n_features_cv, labels_cv, stats_cv, centroids_cv = cv2.connectedComponentsWithStats(C, connectivity=8)
+                print(f"features: {n_features_cv}")
+                label_mask_cv = np.logical_and(stats_cv[:,cv2.CC_STAT_AREA]>1, stats_cv[:,cv2.CC_STAT_AREA]<100)
+                ball_candidates = np.concatenate((stats_cv[label_mask_cv],centroids_cv[label_mask_cv]), axis=1)
 
-                    ## object detection
+                # print((time.time_ns()-start)/1E6)
+                processed_frames.put((n_frame, ball_candidates))
 
-            elif event_manager.record_stream.is_set():
-
-                # processed_frames.put((n_frame, y_data))
-                if n_frame%90 == 0 and n_frame >0:
-                    C = C.astype(np.uint8)*255
-                    processed_frames.put((n_frame, C))
+            elif event_manager.record_stream.is_set() and n_frame > -1:
+                if n_frame%n_calib.value == 0:
+                    processed_frames.put((n_frame, y_data))
             
         except queue.Empty:
                 if not event_manager.recording.is_set() and unprocessed_frames.qsize() == 0:  # if the recording has finished
@@ -214,44 +230,24 @@ class FrameController(object):
         ## -- create processors for processing the individual video frames
         for i in range(n_processors):
             proc_event = mp.Event()
-            processor = mp.Process(target=ImageProcessor, args=(self.unprocessed_frames,self.processed_frames, proc_event, self.event_manager))
+            processor = mp.Process(target=ImageProcessor, args=(self.unprocessed_frames,self.processed_frames, proc_event, self.event_manager,self.n_calib))
             self.proc_complete.append(proc_event)
             self.processors.append(processor)
             processor.start()
 
     def write(self, buf):
-        if self.event_manager.recording.is_set():
-            self.unprocessed_frames.put((self.n_frame, buf))    # add the new frame to the queue
+        self.unprocessed_frames.put((self.n_frame, self.n_frame_2, buf))    # add the new frame to the queue
+        if self.event_manager.recording.is_set() or self.event_manager.record_stream.is_set():
             self.n_frame += 1
-        elif self.event_manager.record_stream.is_set():
-            ########## FOR TESTING ##############
-            self.unprocessed_frames.put((self.n_frame, buf))    # add the new frame to the queue
-
-            # if self.n_frame%n_calib.value == 0:
-            #     self.unprocessed_frames.put((self.n_frame, buf))    # add the new frame to the queue
-            ########## FOR TESTING ##############
-            self.n_frame += 1
-        else:
-            if self.n_frame_2 % 3 == 0:
-                self.unprocessed_frames.put((self.n_frame_2, buf))    # add the new frame to the queue
-            self.n_frame = 0
             self.n_frame_2 += 1
-
-        # if self.recording.is_set():
-        #     if self.calibration.is_set():
-        #         if self.n_frame%n_calib.value == 0:
-        #             self.processed_frames.put((self.n_frame, buf))
-        #     else:
-        #         self.unprocessed_frames.put((self.n_frame, buf))    # add the new frame to the queue
-        #     self.n_frame += 1   # increment the frame number
-        # else:
-        #     self.n_frame = 0    # reset frame number when recording is finished
+        else:
+            self.n_frame = -1
+            self.n_frame_2 += 1
 
     def flush(self):
         for i, processor in enumerate(self.processors):
             self.proc_complete[i].wait() # wait until process has finished
             processor.terminate()
-            processor.join()
         print('shutdown complete')
 
 
@@ -268,6 +264,12 @@ def StartPicam(unprocessed_frames, processed_frames, picam_ready, processing_com
         camera.annotate_foreground = picamera.Color('green')
         ## ----------------------------------------------- ##
         time.sleep(2)   # give the camera a couple of seconds to initialise
+        camera.shutter_speed = camera.exposure_speed
+        camera.exposure_mode = 'off'
+        g = camera.awb_gains
+        camera.awb_mode = 'off'
+        camera.awb_gains = g
+
 
         output = FrameController(unprocessed_frames, processed_frames, proc_complete, n_calib, event_manager)
         camera.start_recording(output, format='yuv')
@@ -286,7 +288,6 @@ def StartPicam(unprocessed_frames, processed_frames, picam_ready, processing_com
                         event_manager.recording.clear()
                         for proc in proc_complete:  # wait for all processing to be complete
                             proc.wait()
-                        event_manager.clear()
                         processing_complete.set()   # set processing complete event
 
                 elif event_manager.record_stream.is_set():
@@ -296,10 +297,11 @@ def StartPicam(unprocessed_frames, processed_frames, picam_ready, processing_com
                     processing_complete.wait()
 
                 elif event_manager.shutdown.is_set():
-                    print('shutdown (picam)')
                     break
         camera.stop_recording()
+        print('shutdown (picam)')
     return
+    # return
 
             # if recording.wait(1):    # wait for recording flag to be set in main()
             #     processing_complete.clear()
@@ -335,7 +337,7 @@ class LED(object):
         # terminate any existing LED process
         if self.process:
             if self.process.is_alive():
-                self.process.kill()
+                self.process.terminate()
         # start new LED process with the new flash frequency
         self.process = mp.Process(target=self.Run,args=(self.led_pin,self.led_freq,self.shutdown))
         self.process.start()
@@ -343,14 +345,11 @@ class LED(object):
     def Kill(self):
         if self.process is not None:
             if self.process.is_alive():
-                self.process.kill()
+                self.process.terminate()
         GPIO.cleanup()
 
     def Run(self,led_pin,led_freq,shutdown):
         while True:
-            if shutdown.is_set():
-                GPIO.cleanup()
-                break
             t = 0
             if (led_freq >= c.LED_F_MIN) and (led_freq <= c.LED_F_MAX):
                 t = abs(1/(2*led_freq))
@@ -365,7 +364,6 @@ class LED(object):
             else:
                 GPIO.output(led_pin, GPIO.LOW)
                 time.sleep(1)
-        return
 
 def record(r_led, g_led, event_manager, processing_complete, processed_frames):
     print('recording')
@@ -379,10 +377,9 @@ def record(r_led, g_led, event_manager, processing_complete, processed_frames):
     while True: # wait here until all frames have been processed and sent to server
         try: 
             # get the processed frames from queue
-            n_frame, y_data = processed_frames.get_nowait()
+            n_frame, ball_candidates = processed_frames.get_nowait()
             print(f"rec: {n_frame}")
-            m = [(n_frame,i,i) for i in range(1000)]
-            message = sf.MyMessage(c.TYPE_BALLS, m)
+            message = sf.MyMessage(c.TYPE_BALLS, (n_frame, ball_candidates))
             if not sf.send_message(client.client_socket, message, c.CLIENT):
                 errors += 1
                 print(f"error: {errors}")
@@ -390,6 +387,7 @@ def record(r_led, g_led, event_manager, processing_complete, processed_frames):
         # if processing complete and no more data to send to server
         except queue.Empty:
             if processing_complete.is_set() and (processed_frames.qsize() == 0):
+                event_manager.clear()
                 break
     # if there were no transmission errors send True, else send False
     if errors == 0:
@@ -416,7 +414,7 @@ def stream(r_led, g_led, event_manager, processing_complete, processed_frames):
             if event_manager.record_stream.is_set():
                 print(f"calib: {n_frame}")
                 # y_data is a numpy array hxw with 8 bit greyscale brightness values
-                y_data = np.frombuffer(frame_buf, dtype=np.uint8, count=w*h).reshape((h,w))
+                y_data = np.frombuffer(frame_buf, dtype=np.float32, count=w*h).reshape((h,w))
                 message = sf.MyMessage(c.TYPE_IMG, (n_frame, y_data))
                 if not sf.send_message(client.client_socket, message, c.CLIENT):
                     errors += 1
@@ -442,12 +440,13 @@ def stream(r_led, g_led, event_manager, processing_complete, processed_frames):
 
 
 
-def shutdown_prog(r_led, g_led, shutdown):
-    r_led.Update(10)
-    g_led.Update(0)
+def shutdown_prog(r_led, g_led, event_manager):
+    r_led.Kill()
+    g_led.Kill()
     print('shutdown (main)')
     event_manager.update()
     event_manager.shutdown.set()
+    return
 
 
 if __name__ == "__main__":
@@ -455,9 +454,7 @@ if __name__ == "__main__":
 
     ## -- setup client connection to server -- ##
 
-    ########## FOR TESTING ##############
-    # client.connect_to_server(name=client_name) 
-    ########## FOR TESTING ##############
+    client.connect_to_server(name=client_name) 
 
     ## -- initialise multithreading objs -- ##
     unprocessed_frames = mp.Queue()
@@ -487,15 +484,6 @@ if __name__ == "__main__":
     picam_ready.wait()
 
     while True and not shutdown.is_set():
-        key = cv2.waitKey(0)
-        if key == ord('a'):
-            stream(r_led, g_led, event_manager, processing_complete, processed_frames)
-        elif key == ord('q'):
-            shutdown_prog(r_led, g_led, event_manager)
-
-    ########## FOR TESTING ############## 
-    '''
-    while True and not shutdown.is_set():
         try:
             message_list = []
             r_led.Update(0)
@@ -521,6 +509,8 @@ if __name__ == "__main__":
 
                     elif message['data'].type == c.TYPE_SHUTDOWN:
                         shutdown_prog(r_led, g_led, event_manager)
+                        break
+
                 except Exception as e:
                     print(e)
                     print('unrecognised message type')
@@ -529,8 +519,7 @@ if __name__ == "__main__":
         except sf.CommError as e:
             traceback.print_exc(file=sys.stdout)
             shutdown_prog(r_led, g_led, event_manager)
-    '''
-    ########## FOR TESTING ##############
+    
                         
             # elif state == c.STATE_RECORDING:
             #     print('recording')
