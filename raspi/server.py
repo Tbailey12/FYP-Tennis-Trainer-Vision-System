@@ -126,6 +126,9 @@ def record(stereo_calib = None, record_time = c.REC_T):
     pos = 0
     left_done = False
     right_done = False
+
+    right_frame = 0
+    left_frame = 0
     ####################################################
     # right_done = True
     ####################################################
@@ -140,7 +143,11 @@ def record(stereo_calib = None, record_time = c.REC_T):
         message_list.extend(read_all_client_messages())
         while pos < len(message_list):
             if message_list[pos]['data'].type == c.TYPE_BALLS:
-                print(message_list[pos]['data'].message[0])
+                # print(message_list[pos]['data'].message[0])
+                if message_list[pos]['client'] == c.LEFT_CLIENT:
+                    left_frame = message_list[pos]['data'].message[0]
+                elif message_list[pos]['client'] == c.RIGHT_CLIENT:
+                    right_frame = message_list[pos]['data'].message[0]
 
             elif message_list[pos]['data'].type == c.TYPE_DONE:
                 if message_list[pos]['client'] == c.LEFT_CLIENT:
@@ -149,6 +156,8 @@ def record(stereo_calib = None, record_time = c.REC_T):
                     right_done = True
                 if left_done and right_done:
                     print('recording finished')
+                    print(f"left frames: {left_frame}")
+                    print(f"right frames: {right_frame}")
                     return True
             else:
                 print(f"unknown message format for recording: {message_list[pos]['data'].type}")
@@ -197,7 +206,7 @@ def stream(run_time = c.CALIB_T, calibrate = False, display = False, timeout = F
                         left_stream_imgs.append((n_frame, y_data))
                     elif message_list[pos]['client'] == c.RIGHT_CLIENT:                    
                         right_stream_imgs.append((n_frame, y_data))
-                    # cv.imwrite(f"{message_list[last_len]['client']}{n_frame}.png",y_data)
+                    # cv.imwrite(f"{message_list[pos]['client']}{n_frame}.png",y_data)
 
                     if display:
                         if (len(left_stream_imgs) > disp_n_frame) and (len(right_stream_imgs) > disp_n_frame): 
@@ -275,7 +284,7 @@ def shutdown():
     send_to_client(c.LEFT_CLIENT, shut_obj)
     send_to_client(c.RIGHT_CLIENT, shut_obj)
     while True:
-        time.sleep(1)
+        time.sleep(2)
         sys.exit()
 
 server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)  # create IPV4 socket for server
@@ -292,7 +301,7 @@ j = 0
 if __name__ == "__main__":
     print("Server started")
     initialise()
-    time.sleep(2)
+    time.sleep(3)
     print('initialised')
     stereo_calib = s_cal.StereoCal()
     
@@ -309,7 +318,7 @@ if __name__ == "__main__":
                     stereo_calib.load_params(c.STEREO_CALIB_F)
                     break
                 elif cmd == "n":
-                    cal_result = stream(run_time=10, calibrate=True, display=True, timeout=10)
+                    cal_result = stream(run_time=60, calibrate=True, display=True, timeout=True)
                     if cal_result:
                         stereo_calib = cal_result
                     break
