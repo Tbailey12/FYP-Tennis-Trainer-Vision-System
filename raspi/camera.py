@@ -28,6 +28,7 @@ resolution = w,h
 framerate = c.FRAMERATE
 n_processors = 4    # number of processors to use for CV
 
+
 client_name = c.LEFT_CLIENT
 
 class EventManager(object):
@@ -80,9 +81,21 @@ def ImageProcessor(unprocessed_frames, processed_frames, proc_complete, event_ma
     B_2_mean = None
     B_less = None
 
-    kernel = np.array([ [0,1,0],
-                        [1,1,1],
-                        [0,1,0]], dtype=np.uint8)
+    ########## FOR TESTING ##############
+    img_array = np.zeros((200,h,w))
+    C_array = np.zeros((200,h,w))
+    save_arr = False
+    y_data = np.zeros((h,w))
+    temp_img = np.zeros((h,w))
+    ########## FOR TESTING ##############
+
+    kernel = np.ones((2,2))
+    kernel2 = np.array( [[0,0,1,0,0],
+                        [0,1,1,1,0],
+                        [1,1,1,1,1],
+                        [0,1,1,1,0],
+                        [0,0,1,0,0]])
+    # kernel2 = np.ones((3,3))
 
     last_n_frame = 0
 
@@ -147,24 +160,35 @@ def ImageProcessor(unprocessed_frames, processed_frames, proc_complete, event_ma
                 # print(unprocessed_frames.qsize())
 
             if not proc_complete.is_set() and n_frame > -1:
-                start = time.time_ns()
+                ########## FOR TESTING ##############
+                # temp_img = cv2.boxFilter(y_data,ddepth=-1,ksize=(5,5),anchor=(-1,-1),normalize=True)
+                ########## FOR TESTING ##############
+
                 B_old = np.copy(B)
                 # B = np.logical_or((y_data > (img_mean + 2*img_std)),
                                   # (y_data < (img_mean - 2*img_std)))  # foreground new
-                np.multiply(img_std,3,out=B_1_std)
+                np.multiply(img_std,2,out=B_1_std)
                 np.add(B_1_std,img_mean,out=B_1_mean)
                 B_greater = np.greater(y_data,B_1_mean)
                 np.subtract(img_mean,B_1_std,out=B_2_mean)
                 B_less = np.less(y_data,B_2_mean)
                 B = np.logical_or(B_greater,B_less)
 
-                A = ~np.logical_and(B_old, B)  # difference between prev foreground and new foreground
+                A = np.invert(np.logical_and(B_old, B))  # difference between prev foreground and new foreground
                 C = np.logical_and(A, B)   # different from previous frame and part of new frame
                 C = 255*C.astype(np.uint8)
 
-                C = cv2.morphologyEx(C, cv2.MORPH_OPEN, kernel)
+                # C = cv2.erode(C, kernel, iterations=2)
+                # C = cv2.dilate(C, kernel2, iterations=2)
+                # C = cv2.morphologyEx(C, cv2.MORPH_OPEN, kernel)
+                # C = cv2.morphologyEx(C, cv2.MORPH_CLOSE, kernel2)
 
-                # cv2.imwrite(f"{n_frame:04d}.png",C)
+                ########## FOR TESTING ##############
+                save_arr = True
+                img_array[n_frame] = y_data
+                C_array[n_frame] = C
+                # cv2.imwrite(f"{n_frame:04d}.png",y_data)
+                ########## FOR TESTING ##############
 
                 n_features_cv, labels_cv, stats_cv, centroids_cv = cv2.connectedComponentsWithStats(C, connectivity=8)
 
@@ -182,7 +206,14 @@ def ImageProcessor(unprocessed_frames, processed_frames, proc_complete, event_ma
         except queue.Empty:
                 if not event_manager.recording.is_set() and unprocessed_frames.qsize() == 0:  # if the recording has finished
                     proc_complete.set()     # set the proc_complete event
-
+                    ######### FOR TESTING ##############
+                    if img_array is not None and save_arr:
+                        for i,img in enumerate(img_array):
+                            if np.mean(img) > 0:
+                                cv2.imwrite(f"{i:04d}.png",img)
+                                cv2.imwrite(f"C{i:04d}.png",C_array[i])
+                        save_arr = False
+                    ######### FOR TESTING ##############
 
         # if not processing:
         #     event_manager.event_change.wait()    # wait for a recording to start

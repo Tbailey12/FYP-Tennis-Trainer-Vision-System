@@ -17,12 +17,13 @@ CHUNK_SIZE = 4096
 REC_T = 1			# default recording time
 CALIB_T = 10  # number of calibration images to take
 CALIB_IMG_DELAY = 1 # seconds between each image
+STREAM_MAX = 60 # maximum time for a stream
 # CALIB_T = 10		# 10 seconds for calibration to take images
 
 ## -- Camera consts -- ##
 FRAMERATE = 90
 
-LEARNING_RATE = 0.1
+LEARNING_RATE = 0.15
 BACKGROUND_RATE = 30
 
 ## -- LED consts -- ##
@@ -57,7 +58,7 @@ STATE_CALIBRATION = "calibration"
 sensor_size = (3.68, 2.76)	# size of the image sensor on the camera
 square_size = 23.4E-3		# size of squares on the chessboard
 pattern_size = (9, 6)  		# number of points (where the black and white intersects)
-MIN_PATTERNS = 10
+MIN_PATTERNS = 25
 
 ## -- Filename consts -- ##
 STEREO_CALIB_F = 'stereo_calib.npy'

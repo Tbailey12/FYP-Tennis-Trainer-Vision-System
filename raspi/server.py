@@ -18,6 +18,8 @@ import stereo_calibration as s_cal
 import multiprocessing as mp
 import queue
 
+import numpy as np
+
 debug = c.DEBUG
 
 
@@ -129,7 +131,10 @@ def record(stereo_calib = None, record_time = c.REC_T):
 
     right_frame = 0
     left_frame = 0
-    ####################################################
+
+    ##################### TESTING #####################
+    left_balls = []
+    right_balls = []
     # right_done = True
     ####################################################
 
@@ -146,8 +151,10 @@ def record(stereo_calib = None, record_time = c.REC_T):
                 # print(message_list[pos]['data'].message[0])
                 if message_list[pos]['client'] == c.LEFT_CLIENT:
                     left_frame = message_list[pos]['data'].message[0]
+                    left_balls.append(message_list[pos]['data'].message)
                 elif message_list[pos]['client'] == c.RIGHT_CLIENT:
                     right_frame = message_list[pos]['data'].message[0]
+                    right_balls.append(message_list[pos]['data'].message)
 
             elif message_list[pos]['data'].type == c.TYPE_DONE:
                 if message_list[pos]['client'] == c.LEFT_CLIENT:
@@ -158,6 +165,10 @@ def record(stereo_calib = None, record_time = c.REC_T):
                     print('recording finished')
                     print(f"left frames: {left_frame}")
                     print(f"right frames: {right_frame}")
+                    ##################### TESTING #####################
+                    np.save('left_ball_candidates.npy', left_balls)
+                    np.save('right_ball_candidates.npy', right_balls)
+                    ###################################################
                     return True
             else:
                 print(f"unknown message format for recording: {message_list[pos]['data'].type}")
@@ -304,6 +315,9 @@ if __name__ == "__main__":
     time.sleep(3)
     print('initialised')
     stereo_calib = s_cal.StereoCal()
+    ########## FOR TESTING ##############
+    stereo_calib.load_params(c.STEREO_CALIB_F)
+    ########## FOR TESTING ##############
     
     while True:
         time.sleep(1/1000)
@@ -326,14 +340,19 @@ if __name__ == "__main__":
                     print(f"{cmd} is not a valid cmd, please try again")
 
         elif cmd == "stream":
-            ########## FOR TESTING ##############
-            stereo_calib.load_params(c.STEREO_CALIB_F)
-            ########## FOR TESTING ##############
-            stream(run_time=10, calibrate=False, display=True, timeout=True)
+            while True:
+                try: 
+                    cmd = int(input("stream time: "))
+                except ValueError:
+                    print("Invalid type, please enter an integer for time")
+                    continue
+                if cmd <= c.STREAM_MAX:
+                    stream(run_time=cmd, calibrate=False, display=True, timeout=True)
+                    break
+                else:
+                    print(f"Please enter a time less than {c.STREAM_MAX}")
+
         elif cmd == "record":
-            ########## FOR TESTING ##############
-            stereo_calib.load_params(c.STEREO_CALIB_F)
-            ########## FOR TESTING ##############
             if stereo_calib.rms is None:
                 print("calibration must be conducted before recording")
             else:
