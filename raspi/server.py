@@ -223,7 +223,8 @@ def stream(run_time = c.CALIB_T, calibrate = False, display = False, timeout = F
                         if (len(left_stream_imgs) > disp_n_frame) and (len(right_stream_imgs) > disp_n_frame): 
                             disp_frame = cv.hconcat([left_stream_imgs[disp_n_frame][1],right_stream_imgs[disp_n_frame][1]])
                             cv.imshow(f"stream", disp_frame)
-                            cv.waitKey(1)
+                            print(disp_n_frame)
+                            cv.waitKey(100)
                             if left_stream_imgs[disp_n_frame][0] >=stopframe and timeout:
                                 done_obj = sf.MyMessage(c.TYPE_DONE, 1)
                                 send_to_client(c.LEFT_CLIENT, done_obj)

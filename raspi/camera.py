@@ -89,12 +89,12 @@ def ImageProcessor(unprocessed_frames, processed_frames, proc_complete, event_ma
     temp_img = np.zeros((h,w))
     ########## FOR TESTING ##############
 
-    kernel = np.ones((2,2))
+    kernel = np.ones((2,2), dtype = np.uint8)
     kernel2 = np.array( [[0,0,1,0,0],
                         [0,1,1,1,0],
                         [1,1,1,1,1],
                         [0,1,1,1,0],
-                        [0,0,1,0,0]])
+                        [0,0,1,0,0]], dtype = np.uint8)
     # kernel2 = np.ones((3,3))
 
     last_n_frame = 0
@@ -178,8 +178,8 @@ def ImageProcessor(unprocessed_frames, processed_frames, proc_complete, event_ma
                 C = np.logical_and(A, B)   # different from previous frame and part of new frame
                 C = 255*C.astype(np.uint8)
 
-                # C = cv2.erode(C, kernel, iterations=2)
-                # C = cv2.dilate(C, kernel2, iterations=2)
+                C = cv2.erode(C, kernel, iterations=2)
+                C = cv2.dilate(C, kernel2, iterations=2)
                 # C = cv2.morphologyEx(C, cv2.MORPH_OPEN, kernel)
                 # C = cv2.morphologyEx(C, cv2.MORPH_CLOSE, kernel2)
 

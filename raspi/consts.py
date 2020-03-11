@@ -9,7 +9,8 @@ RIGHT_CLIENT = 'right'
 ## -- Socket consts -- ##
 SOCKET_TIMEOUT = 5
 HEADER_LENGTH = 24
-IP = "192.168.20.9"		# server IP address
+# IP = "192.168.20.9"		# server IP address
+IP = "192.168.20.9"
 # IP = "127.0.0.1"
 PORT = 1234 
 
