@@ -7,16 +7,7 @@ from datetime import datetime
 import traceback
 
 import consts as c
-import socket_funcs as sf
-
-debug = c.DEBUG
-
-# name = c.LEFT_CLIENT
-
-def print_debug(my_print):
-    if debug:
-        print(my_print) 
- 
+import socket_funcs as sf 
 
 def connect_to_server(name):
     # attempt to connect to the server, if connection refused, wait 1s then try again
@@ -70,7 +61,7 @@ if __name__ == "__main__":
 
         # ----   send messages to the server     ---- #
         message = f"[{counter}] Time:{datetime.now()}"
-        print_debug(f"Sending message to Server: {message}")
+        c.print_debug(f"Sending message to Server: {message}")
         if not sf.send_message(client_socket, message, c.CLIENT):
             sys.exit()  # there was a problem sending the message
 

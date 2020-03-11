@@ -22,6 +22,8 @@ STREAM_MAX = 60 			# maximum time for a stream
 FRAMERATE = 90
 RESOLUTION = (640,480)
 
+## -- Processing consts -- ##
+N_PROCESSORS = 4
 LEARNING_RATE = 0.15
 BACKGROUND_RATE = 30
 
@@ -45,14 +47,6 @@ TYPE_DONE = "done"
 TYPE_SHUTDOWN = "shutdown"
 TYPE_STREAM = "stream"
 
-## -- State definitions -- ##
-STATE_IDLE = "idle"
-STATE_RECORDING = "recording"
-STATE_CAPTURING = "capturing"
-STATE_STOP = "stop"
-STATE_SHUTDOWN = "shutdown"
-STATE_CALIBRATION = "calibration"
-
 ## -- Calibration consts -- ##
 SENSOR_SIZE = (3.68, 2.76)	# size of the image sensor on the camera
 SQUARE_SIZE = 23.4E-3		# size of squares on the chessboard
@@ -63,6 +57,13 @@ MIN_PATTERNS = 25
 STEREO_CALIB_F = 'stereo_calib.npy'
 LEFT_CALIB_F = 'calib_L.npy'
 RIGHT_CALIB_F = 'calib_R.npy'
+IMG_F = 'img'
+DATA_F = 'data'
+
+import os
+ROOT_P = os.getcwd()
+IMG_P = ROOT_P + '//' + IMG_F
+DATA_P = ROOT_P + '//' + DATA_F
 
 ## -- Shared Functions -- ##
 def print_debug(my_print):
