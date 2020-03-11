@@ -1,11 +1,13 @@
+## -- imports -- ##
 import cv2 as cv
 from glob import glob
 import numpy as np
 import pickle
 import os
 import matplotlib.pyplot as plt
+
+## -- custom imports -- ##
 import consts as c
-import camera_calibration as cal
 
 class StereoCal(object):
 	def __init__(self, rms = None, cameraMatrix1 = None, distCoeffs1 = None, cameraMatrix2 = None, distCoeffs2 = None, R = None, T = None, E = None, F = None, R1 = None, R2 = None, P1 = None, P2 = None, Q = None, validPixROI1 = None, validPixROI2 = None):
@@ -27,84 +29,99 @@ class StereoCal(object):
 		self.validPixROI2 = validPixROI2
 
 	def save_params(self, filename):
-	    with open(filename, 'wb') as f:
-	        np.savez(f, rms = self.rms, cameraMatrix1 = self.cameraMatrix1, distCoeffs1 = self.distCoeffs1, cameraMatrix2 = self.cameraMatrix2, distCoeffs2 = self.distCoeffs2, R = self.R, T = self.T, E = self.E, F = self.F, R1 = self.R1, R2 = self.R2, P1 = self.P1, P2 = self.P2, Q = self.Q, validPixROI1 = self.validPixROI1, validPixROI2 = self.validPixROI2)
+		with open(filename, 'wb') as f:
+			np.savez(f, rms = self.rms, cameraMatrix1 = self.cameraMatrix1, distCoeffs1 = self.distCoeffs1, cameraMatrix2 = self.cameraMatrix2, distCoeffs2 = self.distCoeffs2, R = self.R, T = self.T, E = self.E, F = self.F, R1 = self.R1, R2 = self.R2, P1 = self.P1, P2 = self.P2, Q = self.Q, validPixROI1 = self.validPixROI1, validPixROI2 = self.validPixROI2)
 
 	def load_params(self, filename):
 		try:
-		    with open(filename, 'rb') as f:
-		        myfile = np.load(f)
-		        cam_cal = StereoCal(myfile['rms'], myfile['cameraMatrix1'], myfile['distCoeffs1'], myfile['cameraMatrix2'], myfile['distCoeffs2'], myfile['R'], myfile['T'], myfile['E'], myfile['F'], myfile['R1'], myfile['R2'], myfile['P1'], myfile['P2'], myfile['Q'], myfile['validPixROI1'], myfile['validPixROI2'])
-		        print(f"{filename} loaded successfully")
-		        self.rms = myfile['rms']
-		        self.cameraMatrix1 = myfile['cameraMatrix1']
-		        self.distCoeffs1 = myfile['distCoeffs1']
-		        self.cameraMatrix2 = myfile['cameraMatrix2']
-		        self.distCoeffs2 = myfile['distCoeffs2']
-		        self.R = myfile['R']
-		        self.T = myfile['T']
-		        self.E = myfile['E']
-		        self.F = myfile['F']
-		        self.R1 = myfile['R1']
-		        self.R2 = myfile['R2']
-		        self.P1 = myfile['P1']
-		        self.P2 = myfile['P2']
-		        self.Q = myfile['Q']				
-		        self.validPixROI1 = myfile['validPixROI1']				
-		        self.validPixROI2 = myfile['validPixROI2']
-		        return cam_cal
+			with open(filename, 'rb') as f:
+				myfile = np.load(f)
+				# cam_cal = StereoCal(myfile['rms'], myfile['cameraMatrix1'], myfile['distCoeffs1'], myfile['cameraMatrix2'], myfile['distCoeffs2'], myfile['R'], myfile['T'], myfile['E'], myfile['F'], myfile['R1'], myfile['R2'], myfile['P1'], myfile['P2'], myfile['Q'], myfile['validPixROI1'], myfile['validPixROI2'])
+				print(f"{filename} loaded successfully")
+				self.rms = myfile['rms']
+				self.cameraMatrix1 = myfile['cameraMatrix1']
+				self.distCoeffs1 = myfile['distCoeffs1']
+				self.cameraMatrix2 = myfile['cameraMatrix2']
+				self.distCoeffs2 = myfile['distCoeffs2']
+				self.R = myfile['R']
+				self.T = myfile['T']
+				self.E = myfile['E']
+				self.F = myfile['F']
+				self.R1 = myfile['R1']
+				self.R2 = myfile['R2']
+				self.P1 = myfile['P1']
+				self.P2 = myfile['P2']
+				self.Q = myfile['Q']				
+				self.validPixROI1 = myfile['validPixROI1']				
+				self.validPixROI2 = myfile['validPixROI2']
+				return True
 
 		except OSError:
 			print(f"{filename} does not exist")
 
 		return None
 
+class CamCal(object):
+	def __init__(self, rms = None, camera_matrix = None, dist_coefs = None, rvecs = None, tvecs = None):
+		self.rms = rms
+		self.camera_matrix = camera_matrix
+		self.dist_coefs = dist_coefs
+		self.rvecs = rvecs
+		self.tvecs = tvecs
+
+	def save_params(self, filename, rms, camera_matrix, dist_coefs, rvecs, tvecs):
+		with open(filename, 'wb') as f:
+			np.savez(f, rms=self.rms, camera_matrix=self.camera_matrix, dist_coefs=self.dist_coefs, rvecs=self.rvecs, tvecs=self.tvecs)
+
+	def load_params(self, filename):
+		try:
+			with open(filename, 'rb') as f:
+				myfile = np.load(f)
+				# cam_cal = CamCal(myfile['rms'],myfile['camera_matrix'],myfile['dist_coefs'],myfile['rvecs'],myfile['tvecs'])
+				self.rms = myfile['rms']
+				self.camera_matrix = myfile['camera_matrix']
+				self.dist_coefs = myfile['dist_coefs']
+				self.rvecs = myfile['rvecs']
+				self.tvecs = myfile['tvecs']
+				return True
+		except OSError:
+			print(f"{filename} does not exist")
+
 def process_image(img_data, pattern_points):
-    n_frame, img = img_data
+	n_frame, img = img_data
 
-    # check to ensure that the image matches the width/height of the initial image
-    # assert w == img.shape[1] and h == img.shape[0], ("size: %d x %d ..." % (img.shape[1], img.shape[0]))
+	# check to ensure that the image matches the width/height of the initial image
+	# assert w == img.shape[1] and h == img.shape[0], ("size: %d x %d ..." % (img.shape[1], img.shape[0]))
 
-    found, corners = cv.findChessboardCorners(img, c.pattern_size)
-    if found:
-        # term defines when to stop refinement of subpixel coords
-        term = (cv.TERM_CRITERIA_EPS + cv.TERM_CRITERIA_COUNT, 30, 0.1)
-        cv.cornerSubPix(img, corners, (5, 5), (-1, -1), term)
+	found, corners = cv.findChessboardCorners(img, c.PATTERN_SIZE)
+	if found:
+		# term defines when to stop refinement of subpixel coords
+		term = (cv.TERM_CRITERIA_EPS + cv.TERM_CRITERIA_COUNT, 30, 0.1)
+		cv.cornerSubPix(img, corners, (5, 5), (-1, -1), term)
 
-    if not found:
-        print('chessboard not found')
-        return None
+	if not found:
+		print('chessboard not found')
+		return None
 
-    # print message if file contains chessboard
-    # print('%s... OK' % n_frame)
-    return (n_frame, corners.reshape(-1, 2), pattern_points)
+	# print message if file contains chessboard
+	# print('%s... OK' % n_frame)
+	return (n_frame, corners.reshape(-1, 2), pattern_points)
 
 def generate_pattern_points():
-    # -- Setup point lists -- #
-    pattern_points = np.zeros((np.prod(c.pattern_size), 3), np.float32)  # x,y,z for all points in image
-    pattern_points[:, :2] = np.indices(c.pattern_size).T.reshape(-1, 2)  # p.u for all point positions
-    pattern_points *= c.square_size  # scale by square size for point coords
-    return pattern_points
-
+	# -- Setup point lists -- #
+	pattern_points = np.zeros((np.prod(c.PATTERN_SIZE), 3), np.float32)  # x,y,z for all points in image
+	pattern_points[:, :2] = np.indices(c.PATTERN_SIZE).T.reshape(-1, 2)  # p.u for all point positions
+	pattern_points *= c.SQUARE_SIZE  # scale by square size for point coords
+	return pattern_points
 
 def find_chessboards(img_data):
-    # frames = []
-    # obj_points = []
-    # img_points = []
+	pattern_points = generate_pattern_points()
 
-    pattern_points = generate_pattern_points()
+	# find the chessboard points in all images
+	chessboards = [process_image(img, pattern_points) for img in img_data]
+	chessboards = [x for x in chessboards if x is not None]
 
-    # find the chessboard points in all images
-    chessboards = [process_image(img, pattern_points) for img in img_data]
-    chessboards = [x for x in chessboards if x is not None]
-
-    # split the chessboards into image points and object points
-    # for(n_frame, corners, pattern_points) in chessboards:
-    #     frames.append(n_frame)
-    #     img_points.append(corners)
-    #     obj_points.append(pattern_points)
-
-    return chessboards
+	return chessboards
 
 ## -- Checks whether chessboards for a given frame are in both arrays -- ##
 ## - removes the board from the array if there is no matching chessboard
@@ -182,8 +199,10 @@ def main():
 	validate_chessboards(left_chessboards, right_chessboards)
 
 	## -- Load camera data -- ##
-	left_cam = cal.load_params("calib_L.npy")
-	right_cam = cal.load_params("calib_R.npy")
+	left_cam = CamCal()
+	right_cam = CamCal()
+	left_cam.load_params("calib_L.npy")
+	right_cam.load_params("calib_R.npy")
 
 	RMS, cameraMatrix1, distCoeffs1, cameraMatrix2, distCoeffs2, R, T, E, F = calibrate_stereo(
 								left_chessboards, right_chessboards, left_cam, right_cam, size)

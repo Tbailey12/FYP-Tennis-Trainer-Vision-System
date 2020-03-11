@@ -1,35 +1,31 @@
+## -- imports -- ##
 import io
 import time
-# import threading
 import traceback
 import picamera
 import numpy as np
-# import matplotlib.pyplot as plt
 from PIL import Image
 import multiprocessing as mp
 import queue
 import cv2
 import os
 import sys
-
-import client
-import consts as c
-import socket_funcs as sf
-
 import RPi.GPIO as GPIO
-
 from skimage import measure
 from scipy import ndimage
 
+## -- custom imports -- ##
+import client
+import consts as c
+import socket_funcs as sf
+from l_r_consts import *
+
 ## -- camera settings -- ##
-# w,h = (1280,720)
-w,h = (640,480)
-resolution = w,h
+w,h = c.RESOLUTION
 framerate = c.FRAMERATE
 n_processors = 4    # number of processors to use for CV
 
-
-client_name = c.LEFT_CLIENT
+client_name = CLIENT_NAME
 
 class EventManager(object):
     def __init__(self, event_change, recording, record_stream, capture_img, shutdown):
@@ -207,12 +203,12 @@ def ImageProcessor(unprocessed_frames, processed_frames, proc_complete, event_ma
                 if not event_manager.recording.is_set() and unprocessed_frames.qsize() == 0:  # if the recording has finished
                     proc_complete.set()     # set the proc_complete event
                     ######### FOR TESTING ##############
-                    if img_array is not None and save_arr:
-                        for i,img in enumerate(img_array):
-                            if np.mean(img) > 0:
-                                cv2.imwrite(f"{i:04d}.png",img)
-                                cv2.imwrite(f"C{i:04d}.png",C_array[i])
-                        save_arr = False
+                    # if img_array is not None and save_arr:
+                    #     for i,img in enumerate(img_array):
+                    #         if np.mean(img) > 0:
+                    #             cv2.imwrite(f"{i:04d}.png",img)
+                    #             cv2.imwrite(f"C{i:04d}.png",C_array[i])
+                    #     save_arr = False
                     ######### FOR TESTING ##############
 
         # if not processing:
@@ -290,7 +286,7 @@ def StartPicam(unprocessed_frames, processed_frames, picam_ready, processing_com
     proc_complete = []     # contains processing events, true if complete
     with picamera.PiCamera() as camera:
         camera.framerate = framerate
-        camera.resolution = resolution
+        camera.resolution = c.RESOLUTION
         camera.vflip = True # camera is upside down so flip the image
         camera.hflip = True # flip horizontal too
         ## -- adds the frame number to the image for testing

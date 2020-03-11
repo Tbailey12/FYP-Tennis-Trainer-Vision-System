@@ -12,7 +12,7 @@ import cv2 as cv
 
 import consts as c
 import socket_funcs as sf
-import camera_calibration as cal
+# import camera_calibration as cal
 import stereo_calibration as s_cal
 
 import multiprocessing as mp
@@ -26,7 +26,6 @@ debug = c.DEBUG
 def print_debug(my_print):
     if debug:
         print(my_print)
-
 
 def send_to_client(client_name, message):
     for client_socket in sockets_list:
@@ -81,9 +80,9 @@ def read_all_client_messages():
     return []
 
 def search_for_chessboards(chessboards_found, chessboards, left_frame, right_frame):
-    left_chessboard = cal.find_chessboards(left_frame)
+    left_chessboard = s_cal.find_chessboards(left_frame)
     if left_chessboard:
-        right_chessboard = cal.find_chessboards(right_frame)
+        right_chessboard = s_cal.find_chessboards(right_frame)
     if left_chessboard and right_chessboard:
         chessboards.put((left_chessboard[0], right_chessboard[0]))
         chessboards_found.value += 1
@@ -102,9 +101,6 @@ def initialise():
     message_list = []
     left_connected = False
     right_connected = False
-    ####################################################
-    # right_connected = True
-    ####################################################
 
     while True:
         message_list.extend(read_all_client_messages())
@@ -197,9 +193,11 @@ def stream(run_time = c.CALIB_T, calibrate = False, display = False, timeout = F
     send_to_client(c.RIGHT_CLIENT, rec_obj)
 
     if calibrate:
-        # load camera intrinsic calibration data 
-        left_cal = cal.load_params(c.LEFT_CALIB_F)
-        right_cal = cal.load_params(c.RIGHT_CALIB_F)
+        # load camera intrinsic calibration data
+        left_cal = s_cal.CamCal()
+        right_cal = s_cal.CamCal()
+        left_cal.load_params(c.LEFT_CALIB_F)
+        right_cal.load_params(c.RIGHT_CALIB_F)
     while True:
         message_list.extend(read_all_client_messages())
         if len(message_list) > 0:
