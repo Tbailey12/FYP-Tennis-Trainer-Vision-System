@@ -31,7 +31,8 @@ class StereoCal(object):
 	def save_params(self, filename):
 		with open(filename, 'wb') as f:
 			np.savez(f, rms = self.rms, cameraMatrix1 = self.cameraMatrix1, distCoeffs1 = self.distCoeffs1, cameraMatrix2 = self.cameraMatrix2, distCoeffs2 = self.distCoeffs2, R = self.R, T = self.T, E = self.E, F = self.F, R1 = self.R1, R2 = self.R2, P1 = self.P1, P2 = self.P2, Q = self.Q, validPixROI1 = self.validPixROI1, validPixROI2 = self.validPixROI2)
-
+			print(f"{filename} saved successfully")
+			
 	def load_params(self, filename):
 		try:
 			with open(filename, 'rb') as f:
@@ -72,6 +73,7 @@ class CamCal(object):
 	def save_params(self, filename):
 		with open(filename, 'wb') as f:
 			np.savez(f, rms=self.rms, camera_matrix=self.camera_matrix, dist_coefs=self.dist_coefs, rvecs=self.rvecs, tvecs=self.tvecs)
+			print(f"{filename} saved successfully")
 
 	def load_params(self, filename):
 		try:
@@ -106,6 +108,11 @@ def load_calibs():
 
 	return left_cal, right_cal
 
+def save_calib(calib, camera_name):
+	os.chdir(c.DATA_P)
+	cal.save_params(f"{cal.rms:0.4f}{camera_name}")
+	os.chdir(c.ROOT_P)
+
 def load_stereo_calib():
 	os.chdir(c.STEREO_CALIB_P)
 	names = os.listdir()
@@ -117,6 +124,11 @@ def load_stereo_calib():
 
 	os.chdir(c.ROOT_P)
 	return s_cal
+
+def save_stereo_calib(stereo_calib):
+	os.chdir(c.DATA_P)
+	stereo_calib.save_params(f"{stereo_calib.rms:0.4f}{c.STEREO_CALIB_F}")
+	os.chdir(c.ROOT_P)
 
 def process_image(img_data, pattern_points):
 	n_frame, img = img_data
@@ -219,9 +231,8 @@ def calibrate_mono_local(camera_name, img_directory):
 	term = (cv2.TERM_CRITERIA_MAX_ITER + cv2.TERM_CRITERIA_EPS, 100, 1e-6)
 	rms, camera_matrix, dist_coefs, rvecs, tvecs = cv2.calibrateCamera(obj_points, img_points, c.RESOLUTION, distCoeffs=None, cameraMatrix=None ,criteria=term)
 	cal = CamCal(rms, camera_matrix, dist_coefs, rvecs, tvecs)
-	os.chdir(c.DATA_P)
-	cal.save_params(f"{cal.rms:0.4f}{camera_name}")
-	os.chdir(c.ROOT_P)
+	
+	save_calib(cal, camera_name)
 	print(cal.rms)
 	# print(camera_matrix)
 
@@ -267,9 +278,7 @@ def calibrate_stereo_local():
 	s_cal = StereoCal(RMS, cameraMatrix1, distCoeffs1, cameraMatrix2, distCoeffs2, R, T, E, F, \
 								R1, R2, P1, P2, Q, validPixROI1, validPixROI2)	
 
-	os.chdir(c.DATA_P)
-	s_cal.save_params(f"{s_cal.rms:0.4f}{c.STEREO_CALIB_F}")
-	os.chdir(c.ROOT_P)
+	save_stereo_calib(s_cal)
 	# Lx,Ly = (253.0, 218.0)
 	# Rx,Ry = (49.5, 202.8)
 

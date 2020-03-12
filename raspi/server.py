@@ -188,10 +188,8 @@ def stream(run_time = c.CALIB_T, calibrate = False, display = False, timeout = F
 
     if calibrate:
         # load camera intrinsic calibration data
-        left_cal = s_cal.CamCal()
-        right_cal = s_cal.CamCal()
-        left_cal.load_params(c.LEFT_CALIB_F)
-        right_cal.load_params(c.RIGHT_CALIB_F)
+        left_cal, right_cal = s_cal.load_calibs()
+        
     while True:
         message_list.extend(read_all_client_messages())
         if len(message_list) > 0:
@@ -283,7 +281,8 @@ def stream(run_time = c.CALIB_T, calibrate = False, display = False, timeout = F
                             stereo_calib =  s_cal.StereoCal(RMS, cameraMatrix1, distCoeffs1, cameraMatrix2, distCoeffs2, R, T, E, F,
                                                         R1, R2, P1, P2, Q, validPixROI1, validPixROI2)
 
-                            stereo_calib.save_params(c.STEREO_CALIB_F)
+                            s_cal.save_stereo_calib(stereo_calib)
+                        
                             print(f'calibration complete, rms: {RMS}')
                             return stereo_calib
                         else:
@@ -315,10 +314,7 @@ if __name__ == "__main__":
     initialise()
     time.sleep(3)
     print('initialised')
-    stereo_calib = s_cal.StereoCal()
-    ########## FOR TESTING ##############
-    stereo_calib.load_params(c.STEREO_CALIB_F)
-    ########## FOR TESTING ##############
+    stereo_calib = s_cal.load_stereo_calib()
     
     while True:
         time.sleep(1/1000)
@@ -330,7 +326,7 @@ if __name__ == "__main__":
             while True:
                 cmd = input("Load existing calibration? (y/n)")
                 if cmd == "y":
-                    stereo_calib.load_params(c.STEREO_CALIB_F)
+                    stereo_calib = s_cal.load_stereo_calib()
                     break
                 elif cmd == "n":
                     cal_result = stream(run_time=60, calibrate=True, display=True, timeout=True)
