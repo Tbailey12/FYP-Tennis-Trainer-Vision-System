@@ -213,6 +213,14 @@ def stream(run_time = c.CALIB_T, calibrate = False, display = False, timeout = F
 
                     if display:
                         if (len(left_stream_imgs) > disp_n_frame) and (len(right_stream_imgs) > disp_n_frame): 
+                            
+                            ########## FOR TESTING ##############
+                            os.chdir(c.IMG_P)
+                            cv.imwrite(f"l_{(disp_n_frame+100):04d}.png",left_stream_imgs[disp_n_frame][1])
+                            # cv.imwrite(f"r_{time.time_ns():04d}.png",right_stream_imgs[disp_n_frame][1])
+                            os.chdir(c.ROOT_P)
+                            ########## FOR TESTING ##############
+
                             disp_frame = cv.hconcat([left_stream_imgs[disp_n_frame][1],right_stream_imgs[disp_n_frame][1]])
                             cv.imshow(f"stream", disp_frame)
                             print(disp_n_frame)

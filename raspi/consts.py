@@ -28,12 +28,12 @@ LEARNING_RATE = 0.15
 BACKGROUND_RATE = 30
 
 ## -- LED consts -- ##
-LED_F_MAX = 60		# max LED frequency
-LED_F_MIN = 0.5		# min LED frequency
-R_LED_F = 0			# default LED frequency
-G_LED_F = 0
-R_LED_PIN = 24		# red LED pin
-G_LED_PIN = 23		# green LED pin
+LED_F_MAX = 60				# max LED frequency
+LED_F_MIN = 0.5				# min LED frequency
+R_LED_F = 0					# default LED frequency
+G_LED_F = 0		
+R_LED_PIN = 24				# red LED pin
+G_LED_PIN = 23				# green LED pin
 
 ## -- message type definitions -- ##
 TYPE_STR = "text"
@@ -57,13 +57,31 @@ MIN_PATTERNS = 25
 STEREO_CALIB_F = 'stereo_calib.npy'
 LEFT_CALIB_F = 'calib_L.npy'
 RIGHT_CALIB_F = 'calib_R.npy'
+
+## -- Directory consts -- ##
 IMG_F = 'img'
 DATA_F = 'data'
+CALIB_F = 'calib'
+S_CALIB_F = 'stereo_calib'
+CALIB_IMG_L = 'calib_L'
+CALIB_IMG_R = 'calib_R'
+CALIB_IMG_S = 'calib_S'
+
+## -- Active calibration consts -- ##
+ACTIVE_CALIB_F = '2020-03-12_calib2'		# directory containing L,R calib
+ACTIVE_STEREO_F = '0.4545stereo_calib.npy'	# filename of stereo calib
 
 import os
 ROOT_P = os.getcwd()
 IMG_P = ROOT_P + '//' + IMG_F
 DATA_P = ROOT_P + '//' + DATA_F
+CALIB_P = DATA_P + '//' + CALIB_F
+ACTIVE_CALIB_P = CALIB_P + '//' + ACTIVE_CALIB_F
+STEREO_CALIB_P = DATA_P + '//' + S_CALIB_F
+
+LEFT_CALIB_IMG_P = IMG_P + '//' + CALIB_IMG_L
+RIGHT_CALIB_IMG_P = IMG_P + '//' + CALIB_IMG_R
+STEREO_CALIB_IMG_P = IMG_P + '//' + CALIB_IMG_S
 
 ## -- Shared Functions -- ##
 def print_debug(my_print):

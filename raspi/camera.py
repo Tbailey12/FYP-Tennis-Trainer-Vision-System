@@ -150,11 +150,6 @@ def ImageProcessor(unprocessed_frames, processed_frames, proc_complete, event_ma
                 C = np.logical_and(A, B)   # different from previous frame and part of new frame
                 C = 255*C.astype(np.uint8)
 
-                # C = cv2.erode(C, kernel, iterations=2)
-                # C = cv2.dilate(C, kernel2, iterations=2)
-                # C = cv2.morphologyEx(C, cv2.MORPH_OPEN, kernel)
-                # C = cv2.morphologyEx(C, cv2.MORPH_CLOSE, kernel2)
-
                 ########## FOR TESTING ##############
                 C = np.zeros([h,w],dtype=np.uint8)
                 save_arr = True
