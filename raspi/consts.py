@@ -13,7 +13,7 @@ IP = "192.168.20.11"		# server IP address
 PORT = 1234 
 
 CHUNK_SIZE = 4096
-REC_T = 1					# default recording time
+REC_T = 3					# default recording time
 CALIB_T = 10  				# number of calibration images to take
 CALIB_IMG_DELAY = 1 		# seconds between each image
 STREAM_MAX = 60 			# maximum time for a stream

@@ -76,7 +76,7 @@ def ImageProcessor(unprocessed_frames, processed_frames, proc_complete, event_ma
     B_less = np.zeros([h,w],dtype=np.uint8)
 
     ########## FOR TESTING ##############
-    img_array = np.zeros((200,h,w))
+    img_array = np.zeros((275,h,w))
     std_data = np.zeros([h,w],dtype=np.float32)
     mean_data = np.zeros([h,w],dtype=np.float32)
     save_arr = False
@@ -186,6 +186,7 @@ def ImageProcessor(unprocessed_frames, processed_frames, proc_complete, event_ma
                         np.save('img_mean',mean_data)
                         np.save('img_std', std_data)
                         os.chdir(c.ROOT_P)
+                        img_array = np.zeros((275,h,w))
                         save_arr = False
                     ######### FOR TESTING ##############
 

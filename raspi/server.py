@@ -97,6 +97,7 @@ def initialise():
     right_connected = False
 
     while True:
+        time.sleep(1/1000)
         message_list.extend(read_all_client_messages())
         for client_socket in sockets_list:
             if client_socket != server_socket:  # if the socket is not the server socket
