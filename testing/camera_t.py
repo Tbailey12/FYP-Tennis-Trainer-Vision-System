@@ -4,7 +4,6 @@ import time
 import multiprocessing as mp
 import queue
 import numpy as np
-import argparse
 
 TEST_F = 'stereo_tests'
 IMG_F = 'img'
@@ -12,7 +11,7 @@ DATA_F = 'data'
 LEFT_F = 'left'
 RIGHT_F = 'right'
 OUT_F = 'out'
-ACTIVE_TEST_F = '2020-03-12_outside_shot_2'
+# ACTIVE_TEST_F = '2020-03-12_outside_shot_2'
 IMG_MEAN_F = 'img_mean.npy'
 IMG_STD_F = 'img_std.npy'
 
@@ -23,8 +22,8 @@ RESOLUTION = (640,480)
 w,h = RESOLUTION
 NUM_PROCESSORS = 4
 
-def process_img(img_f, img_queue):
-	os.chdir(TEST_P + '//' + img_f + '//' + DATA_F + '//' + ACTIVE_TEST_F)
+def process_img(img_f, img_queue, active_test_dir):
+	os.chdir(TEST_P + '//' + img_f + '//' + DATA_F + '//' + active_test_dir)
 	
 	A =  np.zeros([h,w],dtype=np.uint8)
 	B = np.zeros([h,w],dtype=np.uint8)
@@ -62,15 +61,15 @@ def process_img(img_f, img_queue):
 			C = np.logical_and(A, B)   # different from previous frame and part of new frame
 			C = 255*C.astype(np.uint8)
 
-			os.chdir(TEST_P + '//' + img_f + '//' + OUT_F)
+			os.chdir(TEST_P + '//' + img_f + '//' + OUT_F + '//' + active_test_dir)
 			cv2.imwrite(f"{frame}.png", C)
 
 			img_queue.task_done()
 		except queue.Empty:
 			pass
 
-def read_img(cam_f, img_queue):
-	os.chdir(TEST_P + '//' + cam_f + '//' + IMG_F + '//' + ACTIVE_TEST_F)
+def read_img(cam_f, img_queue, active_test_dir):
+	os.chdir(TEST_P + '//' + cam_f + '//' + IMG_F + '//' + active_test_dir)
 	img_list = os.listdir()
 	
 	for img_name in img_list:
@@ -84,35 +83,55 @@ def read_img(cam_f, img_queue):
 	return
 
 if __name__ == "__main__":
-	process_list = []
-	img_queue = mp.JoinableQueue()
-
-	read_img_proc = mp.Process(target=read_img, args=(LEFT_F, img_queue))
-	read_img_proc.start()
-
-	for i in range(NUM_PROCESSORS):
-		proc = mp.Process(target=process_img, args=(LEFT_F, img_queue))
-		proc.start()
-		process_list.append(proc)
-
-	read_img_proc.join()
-	img_queue.join()
-
-	# make video from image dif
+	# get list of test data directories
+	os.chdir(TEST_P + '//' + LEFT_F + '//' + DATA_F)
+	test_directories = os.listdir()
 	os.chdir(TEST_P + '//' + LEFT_F + '//' + OUT_F)
-	# Construct the argument parser and parse the arguments
-	ap = argparse.ArgumentParser()
-	ap.add_argument("-ext", "--extension", required=False, default='png', help="extension name. default is 'png'.")
-	ap.add_argument("-o", "--output", required=False, default='output.mp4', help="output video file")
-	args = vars(ap.parse_args())
+	for directory in test_directories:
+		try:
+			os.mkdir(directory)
+		except FileExistsError:
+			pass
 
-	output = args['output']
-	fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-	out = cv2.VideoWriter(output, fourcc, 30, RESOLUTION)
+	for directory in test_directories:
+		active_test_dir = str(directory)
+		os.chdir(ROOT_P)
+		process_list = []
+		img_queue = mp.JoinableQueue()
 
-	img_list = os.listdir()
-	for img in img_list:
-		if '.png' in img:
-			out.write(cv2.imread(img))
+		read_img_proc = mp.Process(target=read_img, args=(LEFT_F, img_queue, active_test_dir))
+		read_img_proc.start()
 
-	out.release()
+		for i in range(NUM_PROCESSORS):
+			proc = mp.Process(target=process_img, args=(LEFT_F, img_queue, active_test_dir))
+			proc.start()
+			process_list.append(proc)
+
+		read_img_proc.join()
+		img_queue.join()
+
+		# make video from image dif
+		img_list = []
+		C_list = []
+
+		os.chdir(TEST_P + '//' + LEFT_F + '//' + IMG_F + '//' + active_test_dir)
+		im_names = os.listdir()
+		for im in im_names:
+			img_list.append(cv2.imread(im))
+
+		os.chdir(TEST_P + '//' + LEFT_F + '//' + OUT_F + '//' + active_test_dir)
+		im_names = os.listdir()
+		for im in im_names:
+			C_list.append(cv2.imread(im))
+
+		os.chdir(TEST_P + '//' + LEFT_F + '//' + OUT_F)
+		
+		output = f"{active_test_dir}.mp4"
+		fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+		out = cv2.VideoWriter(output, fourcc, 30, (w,h*2))
+
+		for i, img in enumerate(img_list):
+			out_img = cv2.vconcat([img,C_list[i]])
+			out.write(out_img)
+
+		out.release()
