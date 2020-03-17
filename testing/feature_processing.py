@@ -66,10 +66,10 @@ if __name__ == "__main__":
 	matches = []
 
 	# similarity comparison
-	sim = np.zeros([10,10],dtype=np.float32)
+	sim = np.zeros([100,100],dtype=np.float32)
 	for k in range(max_n):
 		# reset similarity matching array each frame
-		sim = np.zeros([10,10],dtype=np.float32)
+		sim = np.zeros([100,100],dtype=np.float32)
 		matched = []
 
 		# if there are no ball candidates from either camera, skip frame
@@ -121,7 +121,7 @@ if __name__ == "__main__":
 	ax.set_ylabel('y (m)')
 	ax.set_zlabel('z (m)')
 	ax.set_xlim(-2, 2)
-	ax.set_ylim(0, 6)
+	ax.set_ylim(0, 25)
 	ax.set_zlim(0, 1)
 
 	os.chdir("plots")
