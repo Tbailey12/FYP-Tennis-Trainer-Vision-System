@@ -156,6 +156,7 @@ def record(stereo_calib = None, record_time = c.REC_T):
                     print('recording finished')
                     print(f"left frames: {left_frame}")
                     print(f"right frames: {right_frame}")
+                    print(left_balls)
                     ##################### TESTING #####################
                     np.save('left_ball_candidates.npy', left_balls)
                     np.save('right_ball_candidates.npy', right_balls)
@@ -354,7 +355,18 @@ if __name__ == "__main__":
             if stereo_calib.rms is None:
                 print("calibration must be conducted before recording")
             else:
-                record()
+                cmd = input("Recording time: ")
+                try:
+                    cmd = int(cmd)
+                    if cmd < c.REC_T_MAX:
+                        start = time.time_ns()
+                        record(record_time = cmd)
+                        print((time.time_ns()-start)/1E9)
+                    else:
+                        raise ValueError('invalid time entered')
+                except ValueError:
+                    print(f"Invalid recording time, please enter time in s less than {c.REC_T_MAX}")
+
         elif cmd == "shutdown":
             shutdown()
         else:

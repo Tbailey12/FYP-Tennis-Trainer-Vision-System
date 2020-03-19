@@ -20,11 +20,11 @@ def connect_to_server(name):
             time.sleep(1)
         except socket.error as e:
             print("Connection could not be established to server, trying again...")
-            time.sleep(5)
+            time.sleep(1)
             continue
         except socket.timeout as e:
             print("Connection could not be established to server, trying again...")
-            time.sleep(5)
+            time.sleep(1)
             continue
         except Exception as e:
             print('Error', str(e))

@@ -24,6 +24,16 @@ from l_r_consts import *
 w,h = c.RESOLUTION
 client_name = CLIENT_NAME
 
+kernel = np.array([ [0,1,0],
+                    [1,1,1],
+                    [0,1,0]], dtype=np.uint8)
+
+kernel1 = np.array([[0,0,1,0,0],
+                    [0,1,1,1,0],
+                    [1,1,1,1,1],
+                    [0,1,1,1,0],
+                    [0,0,1,0,0]], dtype=np.uint8)
+
 class EventManager(object):
     def __init__(self, event_change, recording, record_stream, capture_img, shutdown):
         self.event_change = event_change
@@ -76,10 +86,10 @@ def ImageProcessor(unprocessed_frames, processed_frames, proc_complete, event_ma
     B_less = np.zeros([h,w],dtype=np.uint8)
 
     ########## FOR TESTING ##############
-    img_array = np.zeros((275,h,w))
-    std_data = np.zeros([h,w],dtype=np.float32)
-    mean_data = np.zeros([h,w],dtype=np.float32)
-    save_arr = False
+    # img_array = np.zeros((275,h,w))
+    # std_data = np.zeros([h,w],dtype=np.float32)
+    # mean_data = np.zeros([h,w],dtype=np.float32)
+    # save_arr = False
     # y_data = np.zeros((h,w))
     # temp_img = np.zeros((h,w))
     ########## FOR TESTING ##############
@@ -97,14 +107,17 @@ def ImageProcessor(unprocessed_frames, processed_frames, proc_complete, event_ma
 
     time_cumulative = 0
 
+    total_time = 0
+    total_frames = 0
+
     while True:
+        # time.sleep(1E-4)
         try:
             if event_manager.shutdown.is_set():
                 proc_complete.set()
                 return
             # get the frames from queue
             n_frame, n_frame_2, frame_buf = unprocessed_frames.get_nowait()
-            # print(f"{n_frame}:{n_frame_2}")
             
             # y_data is a numpy array hxw with 8 bit greyscale brightness values
             y_data = np.frombuffer(frame_buf, dtype=np.uint8, count=w*h).reshape((h,w)).astype(np.float32)
@@ -128,14 +141,7 @@ def ImageProcessor(unprocessed_frames, processed_frames, proc_complete, event_ma
                 np.sqrt(std_6,out=img_std)
 
             if not proc_complete.is_set() and n_frame > -1:
-                ########## FOR TESTING ##############
-                # start = time.time_ns()
-                # temp_img = cv2.boxFilter(y_data,ddepth=-1,ksize=(5,5),anchor=(-1,-1),normalize=True)
-                # print((time.time_ns()-start)/1E6)
-                std_data = img_std
-                mean_data = img_mean
-                ########## FOR TESTING ##############
-
+                start = time.time_ns()
                 B_old = np.copy(B)
                 # B = np.logical_or((y_data > (img_mean + 2*img_std)),
                                   # (y_data < (img_mean - 2*img_std)))  # foreground new
@@ -150,44 +156,54 @@ def ImageProcessor(unprocessed_frames, processed_frames, proc_complete, event_ma
                 C = np.logical_and(A, B)   # different from previous frame and part of new frame
                 C = 255*C.astype(np.uint8)
 
+                C = cv2.morphologyEx(C, cv2.MORPH_CLOSE, kernel, iterations=1)
+                C = cv2.erode(C, kernel1, iterations=1)
+
                 ########## FOR TESTING ##############
-                C = np.zeros([h,w],dtype=np.uint8)
-                save_arr = True
-                img_array[n_frame] = y_data
+                # C = np.zeros([h,w],dtype=np.uint8)
+                # save_arr = True
+                # img_array[n_frame] = y_data
                 # C_array[n_frame] = C
                 # cv2.imwrite(f"{n_frame:04d}.png",y_data)
                 ########## FOR TESTING ##############
 
-                n_features_cv, labels_cv, stats_cv, centroids_cv = cv2.connectedComponentsWithStats(C, connectivity=8)
+                n_features_cv, labels_cv, stats_cv, centroids_cv = cv2.connectedComponentsWithStats(C, connectivity=4)
 
-                label_mask_cv = np.logical_and(stats_cv[:,cv2.CC_STAT_AREA]>1, stats_cv[:,cv2.CC_STAT_AREA]<100)
+                label_mask_cv = np.logical_and(stats_cv[:,cv2.CC_STAT_AREA]>1, stats_cv[:,cv2.CC_STAT_AREA]<10000)
                 ball_candidates = np.concatenate((stats_cv[label_mask_cv],centroids_cv[label_mask_cv]), axis=1)
 
-                # print((time.time_ns()-start)/1E6)
+                # sort ball candidates by size and keep the top 100
+                ball_candidates = ball_candidates[ball_candidates[:,c.SIZE].argsort()[::-1][:c.N_OBJECTS]]
+
                 processed_frames.put((n_frame, ball_candidates))
+                total_time += (time.time_ns()-start)
+                total_frames += 1
 
             elif event_manager.record_stream.is_set() and n_frame > -1:
                 if n_frame%n_calib.value == 0:
                     processed_frames.put((n_frame, y_data))
-                    # cv2.imwrite(f"{n_frame:04d}.png",y_data)
             
         except queue.Empty:
                 if not event_manager.recording.is_set() and unprocessed_frames.qsize() == 0:  # if the recording has finished
                     proc_complete.set()     # set the proc_complete event
+                    if total_frames>0:
+                        print((total_time/total_frames)/1E6)
+                        total_frames = 0
+                        total_time = 0
                     ######### FOR TESTING ##############
-                    if img_array is not None and save_arr:
-                        for i,img in enumerate(img_array):
-                            if np.mean(img) > 0:
-                                os.chdir(c.IMG_P)
-                                cv2.imwrite(f"{i:04d}.png",img)
-                                os.chdir(c.ROOT_P)
-                                # cv2.imwrite(f"C{i:04d}.png",C_array[i])
-                        os.chdir(c.DATA_P)
-                        np.save('img_mean',mean_data)
-                        np.save('img_std', std_data)
-                        os.chdir(c.ROOT_P)
-                        img_array = np.zeros((275,h,w))
-                        save_arr = False
+                    # if img_array is not None and save_arr:
+                    #     for i,img in enumerate(img_array):
+                    #         if np.mean(img) > 0:
+                    #             os.chdir(c.IMG_P)
+                    #             cv2.imwrite(f"{i:04d}.png",img)
+                    #             os.chdir(c.ROOT_P)
+                    #             # cv2.imwrite(f"C{i:04d}.png",C_array[i])
+                    #     os.chdir(c.DATA_P)
+                    #     np.save('img_mean',mean_data)
+                    #     np.save('img_std', std_data)
+                    #     os.chdir(c.ROOT_P)
+                    #     img_array = np.zeros((275,h,w))
+                    #     save_arr = False
                     ######### FOR TESTING ##############
 
 
