@@ -20,7 +20,7 @@ CALIB_IMG_DELAY = 1 		# seconds between each image
 STREAM_MAX = 60 			# maximum time for a stream
 
 ## -- Camera consts -- ##
-FRAMERATE = 90
+FRAMERATE = 60
 RESOLUTION = (640,480)
 
 ## -- Processing consts -- ##

@@ -156,8 +156,9 @@ def record(stereo_calib = None, record_time = c.REC_T):
                     print('recording finished')
                     print(f"left frames: {left_frame}")
                     print(f"right frames: {right_frame}")
-                    print(left_balls)
+
                     ##################### TESTING #####################
+
                     np.save('left_ball_candidates.npy', left_balls)
                     np.save('right_ball_candidates.npy', right_balls)
                     ###################################################

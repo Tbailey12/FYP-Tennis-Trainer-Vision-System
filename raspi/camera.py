@@ -86,20 +86,16 @@ def ImageProcessor(unprocessed_frames, processed_frames, proc_complete, event_ma
     B_less = np.zeros([h,w],dtype=np.uint8)
 
     ########## FOR TESTING ##############
-    # img_array = np.zeros((275,h,w))
+    img_array = []
+    C_array = []
     # std_data = np.zeros([h,w],dtype=np.float32)
     # mean_data = np.zeros([h,w],dtype=np.float32)
-    # save_arr = False
-    # y_data = np.zeros((h,w))
+    save_arr = False
+    y_data = np.zeros((h,w))
+    img_temp = np.zeros((3,h,w))
+    C_temp = np.zeros((3,h,w))
     # temp_img = np.zeros((h,w))
     ########## FOR TESTING ##############
-
-    # kernel = np.ones((2,2), dtype = np.uint8)
-    # kernel2 = np.array( [[0,0,1,0,0],
-    #                     [0,1,1,1,0],
-    #                     [1,1,1,1,1],
-    #                     [0,1,1,1,0],
-    #                     [0,0,1,0,0]], dtype = np.uint8)
 
     last_n_frame = 0
 
@@ -111,7 +107,7 @@ def ImageProcessor(unprocessed_frames, processed_frames, proc_complete, event_ma
     total_frames = 0
 
     while True:
-        # time.sleep(1E-4)
+        time.sleep(1E-4)
         try:
             if event_manager.shutdown.is_set():
                 proc_complete.set()
@@ -141,6 +137,9 @@ def ImageProcessor(unprocessed_frames, processed_frames, proc_complete, event_ma
                 np.sqrt(std_6,out=img_std)
 
             if not proc_complete.is_set() and n_frame > -1:
+                mean_data = img_mean
+                std_data = img_std
+
                 start = time.time_ns()
                 B_old = np.copy(B)
                 # B = np.logical_or((y_data > (img_mean + 2*img_std)),
@@ -159,25 +158,30 @@ def ImageProcessor(unprocessed_frames, processed_frames, proc_complete, event_ma
                 C = cv2.morphologyEx(C, cv2.MORPH_CLOSE, kernel, iterations=1)
                 C = cv2.erode(C, kernel1, iterations=1)
 
-                ########## FOR TESTING ##############
-                # C = np.zeros([h,w],dtype=np.uint8)
-                # save_arr = True
-                # img_array[n_frame] = y_data
-                # C_array[n_frame] = C
-                # cv2.imwrite(f"{n_frame:04d}.png",y_data)
-                ########## FOR TESTING ##############
-
                 n_features_cv, labels_cv, stats_cv, centroids_cv = cv2.connectedComponentsWithStats(C, connectivity=4)
 
-                label_mask_cv = np.logical_and(stats_cv[:,cv2.CC_STAT_AREA]>1, stats_cv[:,cv2.CC_STAT_AREA]<10000)
-                ball_candidates = np.concatenate((stats_cv[label_mask_cv],centroids_cv[label_mask_cv]), axis=1)
+                label_mask_cv = np.logical_and(stats_cv[:,cv2.CC_STAT_AREA]>2, stats_cv[:,cv2.CC_STAT_AREA]<10000)
+                ball_candidates = np.concatenate((stats_cv[label_mask_cv,2:],centroids_cv[label_mask_cv]), axis=1)
 
                 # sort ball candidates by size and keep the top 100
-                ball_candidates = ball_candidates[ball_candidates[:,c.SIZE].argsort()[::-1][:c.N_OBJECTS]]
+                # ball_candidates = ball_candidates[ball_candidates[:,c.SIZE].argsort()[::-1][:c.N_OBJECTS]]
 
                 processed_frames.put((n_frame, ball_candidates))
+
+                ########## FOR TESTING ##############
+                C_temp = cv2.cvtColor(C, cv2.COLOR_GRAY2RGB)
+                img_temp = cv2.cvtColor(y_data, cv2.COLOR_GRAY2RGB)
+                ball_candidates = ball_candidates.astype(int)
+                for ball in ball_candidates:
+                    cv2.drawMarker(C_temp,(ball[c.X_COORD],ball[c.Y_COORD]),(0, 0, 255),cv2.MARKER_CROSS,thickness=2,markerSize=10)
+                    cv2.drawMarker(img_temp,(ball[c.X_COORD],ball[c.Y_COORD]),(0, 0, 255),cv2.MARKER_CROSS,thickness=2,markerSize=10)
+                save_arr = True
+                img_array.append((n_frame, y_data))
+                C_array.append(C_temp)
+
                 total_time += (time.time_ns()-start)
                 total_frames += 1
+                ########## FOR TESTING ##############
 
             elif event_manager.record_stream.is_set() and n_frame > -1:
                 if n_frame%n_calib.value == 0:
@@ -186,24 +190,25 @@ def ImageProcessor(unprocessed_frames, processed_frames, proc_complete, event_ma
         except queue.Empty:
                 if not event_manager.recording.is_set() and unprocessed_frames.qsize() == 0:  # if the recording has finished
                     proc_complete.set()     # set the proc_complete event
+                    ######### FOR TESTING ##############
                     if total_frames>0:
                         print((total_time/total_frames)/1E6)
                         total_frames = 0
                         total_time = 0
-                    ######### FOR TESTING ##############
-                    # if img_array is not None and save_arr:
-                    #     for i,img in enumerate(img_array):
-                    #         if np.mean(img) > 0:
-                    #             os.chdir(c.IMG_P)
-                    #             cv2.imwrite(f"{i:04d}.png",img)
-                    #             os.chdir(c.ROOT_P)
-                    #             # cv2.imwrite(f"C{i:04d}.png",C_array[i])
-                    #     os.chdir(c.DATA_P)
-                    #     np.save('img_mean',mean_data)
-                    #     np.save('img_std', std_data)
-                    #     os.chdir(c.ROOT_P)
-                    #     img_array = np.zeros((275,h,w))
-                    #     save_arr = False
+                    if img_array is not None and save_arr:
+                        for i,img in enumerate(img_array):
+                            frame, data = img
+                            os.chdir(c.IMG_P)
+                            cv2.imwrite(f"{frame:04d}.png",data)
+                            # os.chdir(c.ROOT_P)
+                            cv2.imwrite(f"C{frame:04d}.png",C_array[i])
+                        os.chdir(c.DATA_P)
+                        np.save('img_mean',mean_data)
+                        np.save('img_std', std_data)
+                        os.chdir(c.ROOT_P)
+                        img_array = []
+                        C_array = []
+                        save_arr = False
                     ######### FOR TESTING ##############
 
 
