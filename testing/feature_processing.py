@@ -121,7 +121,7 @@ if __name__ == "__main__":
 	ax.set_ylabel('y (m)')
 	ax.set_zlabel('z (m)')
 	ax.set_xlim(-2, 2)
-	ax.set_ylim(0, 25)
+	ax.set_ylim(0, 5)
 	ax.set_zlim(0, 1)
 
 	os.chdir("plots")

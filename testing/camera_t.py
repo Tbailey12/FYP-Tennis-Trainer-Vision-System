@@ -8,7 +8,7 @@ import numpy as np
 TEST_F = 'stereo_tests'
 IMG_F = 'img'
 DATA_F = 'data'
-RIGHT_F = 'left'
+LEFT_F = 'left'
 RIGHT_F = 'right'
 OUT_F = 'out'
 # ACTIVE_TEST_F = '2020-03-12_outside_shot_2'
@@ -23,6 +23,7 @@ w,h = RESOLUTION
 NUM_PROCESSORS = 4
 p = 0.01
 
+N_OBJECTS = 100
 SIZE = 2
 X = 3
 Y = 4
@@ -75,7 +76,7 @@ def process_img(img_f, img_queue, active_test_dir, out_q):
 			B_old = np.copy(B)
 			# B = np.logical_or((y_data > (img_mean + 2*img_std)),
 			# (y_data < (img_mean - 2*img_std)))  # foreground new
-			np.multiply(img_std,3,out=B_1_std)
+			np.multiply(img_std,2,out=B_1_std)
 			np.add(B_1_std,img_mean,out=B_1_mean)
 			B_greater = np.greater(y_data,B_1_mean)
 			np.subtract(img_mean,B_1_std,out=B_2_mean)
@@ -87,10 +88,11 @@ def process_img(img_f, img_queue, active_test_dir, out_q):
 
 
 			# C = B
-			C = 255*C.astype(np.uint8)
+			C = 255*B.astype(np.uint8)
 
-			C = cv2.morphologyEx(C, cv2.MORPH_CLOSE, kernel, iterations=1)
-			C = cv2.erode(C, kernel1, iterations=1)
+			# C = cv2.morphologyEx(C, cv2.MORPH_CLOSE, kernel, iterations=1)
+			C = cv2.dilate(C, kernel, iterations=1)
+			C = cv2.erode(C, kernel, iterations=2)
 
 			# for i in ec_order:
 			# 	if i == 'e':
@@ -117,8 +119,11 @@ def process_img(img_f, img_queue, active_test_dir, out_q):
 			## -- object detection -- ##
 			n_features_cv, labels_cv, stats_cv, centroids_cv = cv2.connectedComponentsWithStats(C, connectivity=4)
 
-			label_mask_cv = np.logical_and(stats_cv[:,cv2.CC_STAT_AREA]>1, stats_cv[:,cv2.CC_STAT_AREA]<10000)
+			label_mask_cv = np.logical_and(stats_cv[:,cv2.CC_STAT_AREA]>5, stats_cv[:,cv2.CC_STAT_AREA]<10000)
 			ball_candidates = np.concatenate((stats_cv[label_mask_cv,2:],centroids_cv[label_mask_cv]), axis=1)
+
+			# sort ball candidates by size and keep the top 100
+			ball_candidates = ball_candidates[ball_candidates[:,SIZE].argsort()[::-1][:N_OBJECTS]]
 
 			out_q.put((frame, ball_candidates))
 
@@ -163,9 +168,9 @@ if __name__ == "__main__":
 	ball_candidates_out = []
 
 	# get list of test data directories
-	os.chdir(TEST_P + '//' + RIGHT_F + '//' + DATA_F)
+	os.chdir(TEST_P + '//' + LEFT_F + '//' + DATA_F)
 	test_directories = os.listdir()
-	os.chdir(TEST_P + '//' + RIGHT_F + '//' + OUT_F)
+	os.chdir(TEST_P + '//' + LEFT_F + '//' + OUT_F)
 	for directory in test_directories:
 		try:
 			os.mkdir(directory)
@@ -174,7 +179,7 @@ if __name__ == "__main__":
 
 	# directory = test_directories[4]
 	# print(directory)
-	for directory in test_directories[4:5]:
+	for directory in test_directories[6:]:
 		active_test_dir = str(directory)
 		os.chdir(ROOT_P)
 		process_list = []
@@ -184,11 +189,11 @@ if __name__ == "__main__":
 		for i in range(NUM_PROCESSORS):
 			q = mp.JoinableQueue()
 			queue_list.append(q)
-			proc = mp.Process(target=process_img, args=(RIGHT_F, q, active_test_dir, out_q))
+			proc = mp.Process(target=process_img, args=(LEFT_F, q, active_test_dir, out_q))
 			proc.start()
 			process_list.append(proc)
 
-		read_img_proc = mp.Process(target=read_img, args=(RIGHT_F, queue_list, active_test_dir))
+		read_img_proc = mp.Process(target=read_img, args=(LEFT_F, queue_list, active_test_dir))
 		read_img_proc.start()
 
 
@@ -204,14 +209,14 @@ if __name__ == "__main__":
 			except queue.Empty:
 				break
 
-		os.chdir(TEST_P + '//' + RIGHT_F + '//' + DATA_F)
-		np.save('right_ball_candidates.npy', ball_candidates_out)
+		# os.chdir(TEST_P + '//' + LEFT_F + '//' + DATA_F)
+		# np.save('right_ball_candidates.npy', ball_candidates_out)
 
 		# make video from image dif
 		img_list = []
 		C_list = []
 
-		os.chdir(TEST_P + '//' + RIGHT_F + '//' + OUT_F + '//' + active_test_dir)
+		os.chdir(TEST_P + '//' + LEFT_F + '//' + OUT_F + '//' + active_test_dir)
 		im_names = os.listdir()
 		for im in im_names:
 			if 'C' in im:
@@ -224,7 +229,7 @@ if __name__ == "__main__":
 		# for im in im_names:
 		# 	C_list.append(cv2.imread(im))
 
-		os.chdir(TEST_P + '//' + RIGHT_F + '//' + OUT_F)
+		os.chdir(TEST_P + '//' + LEFT_F + '//' + OUT_F)
 		
 		output = f"{active_test_dir}.mp4"
 		fourcc = cv2.VideoWriter_fourcc(*'mp4v')

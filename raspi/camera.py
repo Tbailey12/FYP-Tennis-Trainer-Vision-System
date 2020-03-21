@@ -151,20 +151,20 @@ def ImageProcessor(unprocessed_frames, processed_frames, proc_complete, event_ma
                 B_less = np.less(y_data,B_2_mean)
                 B = np.logical_or(B_greater,B_less)
 
-                A = np.invert(np.logical_and(B_old, B))  # difference between prev foreground and new foreground
-                C = np.logical_and(A, B)   # different from previous frame and part of new frame
-                C = 255*C.astype(np.uint8)
+                # A = np.invert(np.logical_and(B_old, B))  # difference between prev foreground and new foreground
+                # C = np.logical_and(A, B)   # different from previous frame and part of new frame
+                C = 255*B.astype(np.uint8)
 
-                C = cv2.morphologyEx(C, cv2.MORPH_CLOSE, kernel, iterations=1)
-                C = cv2.erode(C, kernel1, iterations=1)
+                C = cv2.dilate(C, kernel, iterations=1)
+                C = cv2.erode(C, kernel, iterations=2)
 
                 n_features_cv, labels_cv, stats_cv, centroids_cv = cv2.connectedComponentsWithStats(C, connectivity=4)
 
-                label_mask_cv = np.logical_and(stats_cv[:,cv2.CC_STAT_AREA]>2, stats_cv[:,cv2.CC_STAT_AREA]<10000)
+                label_mask_cv = np.logical_and(stats_cv[:,cv2.CC_STAT_AREA]>5, stats_cv[:,cv2.CC_STAT_AREA]<10000)
                 ball_candidates = np.concatenate((stats_cv[label_mask_cv,2:],centroids_cv[label_mask_cv]), axis=1)
 
                 # sort ball candidates by size and keep the top 100
-                # ball_candidates = ball_candidates[ball_candidates[:,c.SIZE].argsort()[::-1][:c.N_OBJECTS]]
+                ball_candidates = ball_candidates[ball_candidates[:,c.SIZE].argsort()[::-1][:c.N_OBJECTS]]
 
                 processed_frames.put((n_frame, ball_candidates))
 
