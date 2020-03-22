@@ -113,16 +113,19 @@ def process_img(img_f, img_queue, active_test_dir, out_q):
 
 
 			# C = B
-			C = 255*C.astype(np.uint8)
-			C = cv2.filter2D(C, ddepth = -1, kernel=(1/16)*kernel2)
-			C[C<174] = 0
-			C[C>=174] = 255
-
-			# C = cv2.morphologyEx(C, cv2.MORPH_CLOSE, kernel, iterations=1)
-			# C = cv2.dilate(C, kernel, iterations=1)
-			# C = cv2.erode(C, kernel, iterations=2)
+			C = 255*B.astype(np.uint8)
+			# C = cv2.filter2D(C, ddepth = -1, kernel=(1/25)*kernel3)
+			# C[C<174] = 0
+			# C[C>=174] = 255
 
 			# C = cv2.morphologyEx(C, cv2.MORPH_CLOSE, kernelt3, iterations=1)
+			# C = cv2.erode(C, kernelc5, iterations=1)
+
+			# C = cv2.morphologyEx(C, cv2.MORPH_CLOSE, kernelt3, iterations=1)
+			# C = cv2.erode(C, kernelc5, iterations=1)
+			# C = cv2.dilate(C, kernel, iterations=1)
+			# C = cv2.dilate(C, kernel, iterations=1)
+
 			# C = cv2.erode(C, kernelc5, iterations=1)
 			# for i in ec_order:
 			# 	if i == 'e':
@@ -130,7 +133,6 @@ def process_img(img_f, img_queue, active_test_dir, out_q):
 			# 	elif i == 'c':
 			# 		C = cv2.morphologyEx(C, cv2.MORPH_CLOSE, k2, iterations=1)
 
-			total_time = total_time + (time.time_ns()-start)
 
 			# calculate new std deviation and mean
 			# y_data = np.bitwise_and(y_data, np.invert(C))
@@ -151,9 +153,10 @@ def process_img(img_f, img_queue, active_test_dir, out_q):
 			## -- object detection -- ##
 			n_features_cv, labels_cv, stats_cv, centroids_cv = cv2.connectedComponentsWithStats(C, connectivity=4)
 
-			label_mask_cv = np.logical_and(stats_cv[:,cv2.CC_STAT_AREA]>4, stats_cv[:,cv2.CC_STAT_AREA]<10000)
+			label_mask_cv = np.logical_and(stats_cv[:,cv2.CC_STAT_AREA]>5, stats_cv[:,cv2.CC_STAT_AREA]<10000)
 			ball_candidates = np.concatenate((stats_cv[label_mask_cv,2:],centroids_cv[label_mask_cv]), axis=1)
 
+			total_time = total_time + (time.time_ns()-start)
 			# sort ball candidates by size and keep the top 100
 			# ball_candidates = ball_candidates[ball_candidates[:,SIZE].argsort()[::-1][:N_OBJECTS]]
 
