@@ -24,15 +24,7 @@ from l_r_consts import *
 w,h = c.RESOLUTION
 client_name = CLIENT_NAME
 
-kernel = np.array([ [0,1,0],
-                    [1,1,1],
-                    [0,1,0]], dtype=np.uint8)
-
-kernel1 = np.array([[0,0,1,0,0],
-                    [0,1,1,1,0],
-                    [1,1,1,1,1],
-                    [0,1,1,1,0],
-                    [0,0,1,0,0]], dtype=np.uint8)
+kernel4 = (1/16)*np.ones((4,4), dtype=np.uint8)
 
 class EventManager(object):
     def __init__(self, event_change, recording, record_stream, capture_img, shutdown):
@@ -144,23 +136,25 @@ def ImageProcessor(unprocessed_frames, processed_frames, proc_complete, event_ma
                 B_old = np.copy(B)
                 # B = np.logical_or((y_data > (img_mean + 2*img_std)),
                                   # (y_data < (img_mean - 2*img_std)))  # foreground new
-                np.multiply(img_std,2,out=B_1_std)
+                np.multiply(img_std,3,out=B_1_std)
                 np.add(B_1_std,img_mean,out=B_1_mean)
                 B_greater = np.greater(y_data,B_1_mean)
                 np.subtract(img_mean,B_1_std,out=B_2_mean)
                 B_less = np.less(y_data,B_2_mean)
                 B = np.logical_or(B_greater,B_less)
 
-                # A = np.invert(np.logical_and(B_old, B))  # difference between prev foreground and new foreground
-                # C = np.logical_and(A, B)   # different from previous frame and part of new frame
-                C = 255*B.astype(np.uint8)
+                A = np.invert(np.logical_and(B_old, B))  # difference between prev foreground and new foreground
+                C = np.logical_and(A, B)   # different from previous frame and part of new frame
+                
+                C = 255*C.astype(np.uint8)
 
-                C = cv2.dilate(C, kernel, iterations=1)
-                C = cv2.erode(C, kernel, iterations=2)
+                C = cv2.filter2D(C, ddepth = -1, kernel=kernel4)
+                C[C<c.LPF_THRESH] = 0
+                C[C>=c.LPF_THRESH] = 255
 
                 n_features_cv, labels_cv, stats_cv, centroids_cv = cv2.connectedComponentsWithStats(C, connectivity=4)
 
-                label_mask_cv = np.logical_and(stats_cv[:,cv2.CC_STAT_AREA]>5, stats_cv[:,cv2.CC_STAT_AREA]<10000)
+                label_mask_cv = np.logical_and(stats_cv[:,cv2.CC_STAT_AREA]>2, stats_cv[:,cv2.CC_STAT_AREA]<10000)
                 ball_candidates = np.concatenate((stats_cv[label_mask_cv,2:],centroids_cv[label_mask_cv]), axis=1)
 
                 # sort ball candidates by size and keep the top 100
@@ -169,15 +163,16 @@ def ImageProcessor(unprocessed_frames, processed_frames, proc_complete, event_ma
                 processed_frames.put((n_frame, ball_candidates))
 
                 ########## FOR TESTING ##############
-                C_temp = cv2.cvtColor(C, cv2.COLOR_GRAY2RGB)
-                img_temp = cv2.cvtColor(y_data, cv2.COLOR_GRAY2RGB)
-                ball_candidates = ball_candidates.astype(int)
-                for ball in ball_candidates:
-                    cv2.drawMarker(C_temp,(ball[c.X_COORD],ball[c.Y_COORD]),(0, 0, 255),cv2.MARKER_CROSS,thickness=2,markerSize=10)
-                    cv2.drawMarker(img_temp,(ball[c.X_COORD],ball[c.Y_COORD]),(0, 0, 255),cv2.MARKER_CROSS,thickness=2,markerSize=10)
-                save_arr = True
-                img_array.append((n_frame, y_data))
-                C_array.append(C_temp)
+                # C_temp = cv2.cvtColor(C, cv2.COLOR_GRAY2RGB)
+                # img_temp = cv2.cvtColor(y_data, cv2.COLOR_GRAY2RGB)
+                # ball_candidates = ball_candidates.astype(int)
+                # for ball in ball_candidates:
+                #     cv2.drawMarker(C_temp,(ball[c.X_COORD],ball[c.Y_COORD]),(0, 0, 255),cv2.MARKER_CROSS,thickness=2,markerSize=10)
+                #     cv2.drawMarker(img_temp,(ball[c.X_COORD],ball[c.Y_COORD]),(0, 0, 255),cv2.MARKER_CROSS,thickness=2,markerSize=10)
+                
+                # save_arr = True
+                # img_array.append((n_frame, y_data))
+                # C_array.append(C_temp)
 
                 total_time += (time.time_ns()-start)
                 total_frames += 1
@@ -195,20 +190,20 @@ def ImageProcessor(unprocessed_frames, processed_frames, proc_complete, event_ma
                         print((total_time/total_frames)/1E6)
                         total_frames = 0
                         total_time = 0
-                    if img_array is not None and save_arr:
-                        for i,img in enumerate(img_array):
-                            frame, data = img
-                            os.chdir(c.IMG_P)
-                            cv2.imwrite(f"{frame:04d}.png",data)
-                            # os.chdir(c.ROOT_P)
-                            cv2.imwrite(f"C{frame:04d}.png",C_array[i])
-                        os.chdir(c.DATA_P)
-                        np.save('img_mean',mean_data)
-                        np.save('img_std', std_data)
-                        os.chdir(c.ROOT_P)
-                        img_array = []
-                        C_array = []
-                        save_arr = False
+                    # if img_array is not None and save_arr:
+                    #     for i,img in enumerate(img_array):
+                    #         frame, data = img
+                    #         os.chdir(c.IMG_P)
+                    #         cv2.imwrite(f"{frame:04d}.png",data)
+                    #         # os.chdir(c.ROOT_P)
+                    #         cv2.imwrite(f"C{frame:04d}.png",C_array[i])
+                    #     os.chdir(c.DATA_P)
+                    #     np.save('img_mean',mean_data)
+                    #     np.save('img_std', std_data)
+                    #     os.chdir(c.ROOT_P)
+                    #     img_array = []
+                    #     C_array = []
+                    #     save_arr = False
                     ######### FOR TESTING ##############
 
 
@@ -256,6 +251,7 @@ def StartPicam(unprocessed_frames, processed_frames, picam_ready, processing_com
     with picamera.PiCamera() as camera:
         camera.framerate = c.FRAMERATE
         camera.resolution = c.RESOLUTION
+        camera.iso = c.ISO
         camera.vflip = True # camera is upside down so flip the image
         camera.hflip = True # flip horizontal too
         ## -- adds the frame number to the image for testing
@@ -269,6 +265,11 @@ def StartPicam(unprocessed_frames, processed_frames, picam_ready, processing_com
         g = camera.awb_gains
         camera.awb_mode = 'off'
         camera.awb_gains = g
+
+
+        print(f"shutter: {camera.shutter_speed}")
+        print(f"awb: {g}")
+        print(f'iso: {camera.iso}')
 
 
         output = FrameController(unprocessed_frames, processed_frames, proc_complete, n_calib, event_manager)
@@ -300,22 +301,6 @@ def StartPicam(unprocessed_frames, processed_frames, picam_ready, processing_com
                     break
         camera.stop_recording()
     return
-    # return
-
-            # if recording.wait(1):    # wait for recording flag to be set in main()
-            #     processing_complete.clear()
-            #     try:
-            #         for proc in proc_complete:  # reset all processing complete events
-            #             proc.clear()
-            #         camera.wait_recording(t_record.value) # record for an amount of time
-            #     finally:
-            #         recording.clear()   # clear the record flag to stop processing
-            #         for proc in proc_complete:  # wait for all processing to be complete
-            #             proc.wait()
-            #         processing_complete.set()   # set processing complete event
-            # elif shutdown.is_set():
-            #     print('shutdown (picam)')
-            #     break 
 
 
 class LED(object):

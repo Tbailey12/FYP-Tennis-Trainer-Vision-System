@@ -205,7 +205,7 @@ def calibrate_stereo(left_chessboards, right_chessboards, left_cam, right_cam, s
 		RMS, cameraMatrix1, distCoeffs1, cameraMatrix2, distCoeffs2, R, T, E, F = cv2.stereoCalibrate(
 								object_points, left_image_points, right_image_points, left_cam.camera_matrix, 
 								left_cam.dist_coefs, right_cam.camera_matrix, right_cam.dist_coefs, 
-								size, criteria=term_crit ,flags=cv2.CALIB_FIX_INTRINSIC)
+								size, criteria=term_crit ,flags=cv2.CALIB_USE_INTRINSIC_GUESS)
 	
 	else:
 		print('there is not enough chessboard views for calibration, please repeat')

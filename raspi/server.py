@@ -217,8 +217,8 @@ def stream(run_time = c.CALIB_T, calibrate = False, display = False, timeout = F
                             
                             ########## FOR TESTING ##############
                             os.chdir(c.IMG_P)
-                            cv.imwrite(f"l_{(disp_n_frame+100):04d}.png",left_stream_imgs[disp_n_frame][1])
-                            # cv.imwrite(f"r_{time.time_ns():04d}.png",right_stream_imgs[disp_n_frame][1])
+                            cv.imwrite(f"l_{(disp_n_frame):04d}.png",left_stream_imgs[disp_n_frame][1])
+                            cv.imwrite(f"r_{(disp_n_frame):04d}.png",right_stream_imgs[disp_n_frame][1])
                             os.chdir(c.ROOT_P)
                             ########## FOR TESTING ##############
 
@@ -361,7 +361,7 @@ if __name__ == "__main__":
                     cmd = int(cmd)
                     if cmd < c.REC_T_MAX:
                         start = time.time_ns()
-                        record(record_time = cmd)
+                        record(stereo_calib= stereo_calib, record_time = cmd)
                         print((time.time_ns()-start)/1E9)
                     else:
                         raise ValueError('invalid time entered')

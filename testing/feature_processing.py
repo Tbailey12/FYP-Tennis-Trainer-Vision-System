@@ -16,6 +16,9 @@ if __name__ == "__main__":
 	WIDTH = 1
 	HEIGHT = 2
 
+	RESOLUTION = (640,480)
+	w,h = RESOLUTION
+
 	# searching 2D array for max
 	# test = np.zeros([4,4])
 	# test[1,3] = 1
@@ -26,7 +29,7 @@ if __name__ == "__main__":
 	# loc = np.where(test==np.amax(test))
 
 	s_calib = s_cal.StereoCal()
-	s_calib = s_calib.load_params("stereo_calib.npy")
+	s_calib.load_params("0.4485stereo_calib.npy")
 
 	left_balls = np.load("left_ball_candidates.npy", allow_pickle=True)
 	right_balls = np.load("right_ball_candidates.npy", allow_pickle=True)
@@ -35,9 +38,7 @@ if __name__ == "__main__":
 	left_balls = left_balls[left_balls[:,0].argsort()]
 	right_balls = right_balls[right_balls[:,0].argsort()]
 
-	# print(left_balls[120,1].astype(int))
-	# print(right_balls[120,1].astype(int))
-
+	
 	# testing stereo calibration
 	# img = cv2.imread("0000.png",cv2.IMREAD_GRAYSCALE)
 	# start = time.time_ns()
@@ -54,10 +55,10 @@ if __name__ == "__main__":
 	rectify_points(max_n, right_balls, s_calib.cameraMatrix2, s_calib.distCoeffs2, s_calib.R2, s_calib.P2)
 
 	X_W = 0.2
-	Y_W = 0.2
+	Y_W = 1
 	W_W = 0.5
 	H_W = 0.5
-	SIZE_W = 1
+	SIZE_W = 0.8
 
 	# print(left_balls[120,1].astype(int))
 	# print(right_balls[120,1].astype(int))
@@ -121,13 +122,13 @@ if __name__ == "__main__":
 	ax.set_ylabel('y (m)')
 	ax.set_zlabel('z (m)')
 	ax.set_xlim(-2, 2)
-	ax.set_ylim(0, 5)
-	ax.set_zlim(0, 1)
+	ax.set_ylim(0, 25)
+	ax.set_zlim(-2, 1)
 
-	os.chdir("plots")
+	# os.chdir("plots")
 
 	for frame, point in candidates_3D:
 		if len(point) > 0 and point.item(2)>0:
 			ax.scatter(xs=point.item(0),ys=point.item(2),zs=-point.item(1)+0.5)
-		plt.savefig(f"{frame:04d}.png")
+		# plt.savefig(f"{frame:04d}.png")
 	plt.show()

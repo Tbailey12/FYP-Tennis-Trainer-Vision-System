@@ -9,7 +9,7 @@ from operator import itemgetter
 TEST_F = 'stereo_tests'
 IMG_F = 'img'
 DATA_F = 'data'
-LEFT_F = 'left'
+LEFT_F = 'right'
 RIGHT_F = 'right'
 OUT_F = 'out'
 # ACTIVE_TEST_F = '2020-03-12_outside_shot_2'
@@ -101,7 +101,7 @@ def process_img(img_f, img_queue, active_test_dir, out_q):
 			B_old = np.copy(B)
 			# B = np.logical_or((y_data > (img_mean + 2*img_std)),
 			# (y_data < (img_mean - 2*img_std)))  # foreground new
-			np.multiply(img_std,2,out=B_1_std)
+			np.multiply(img_std,3,out=B_1_std)
 			np.add(B_1_std,img_mean,out=B_1_mean)
 			B_greater = np.greater(y_data,B_1_mean)
 			np.subtract(img_mean,B_1_std,out=B_2_mean)
@@ -113,10 +113,10 @@ def process_img(img_f, img_queue, active_test_dir, out_q):
 
 
 			# C = B
-			C = 255*B.astype(np.uint8)
-			# C = cv2.filter2D(C, ddepth = -1, kernel=(1/25)*kernel3)
-			# C[C<174] = 0
-			# C[C>=174] = 255
+			C = 255*C.astype(np.uint8)
+			C = cv2.filter2D(C, ddepth = -1, kernel=(1/16)*kernel2)
+			C[C<150] = 0
+			C[C>=150] = 255
 
 			# C = cv2.morphologyEx(C, cv2.MORPH_CLOSE, kernelt3, iterations=1)
 			# C = cv2.erode(C, kernelc5, iterations=1)
@@ -153,7 +153,7 @@ def process_img(img_f, img_queue, active_test_dir, out_q):
 			## -- object detection -- ##
 			n_features_cv, labels_cv, stats_cv, centroids_cv = cv2.connectedComponentsWithStats(C, connectivity=4)
 
-			label_mask_cv = np.logical_and(stats_cv[:,cv2.CC_STAT_AREA]>5, stats_cv[:,cv2.CC_STAT_AREA]<10000)
+			label_mask_cv = np.logical_and(stats_cv[:,cv2.CC_STAT_AREA]>2, stats_cv[:,cv2.CC_STAT_AREA]<10000)
 			ball_candidates = np.concatenate((stats_cv[label_mask_cv,2:],centroids_cv[label_mask_cv]), axis=1)
 
 			total_time = total_time + (time.time_ns()-start)
@@ -251,20 +251,19 @@ if __name__ == "__main__":
 				break
 		
 		# sort all the ball candidates
-		ball_candidates_out.sort(key=itemgetter(0))
+		# ball_candidates_out.sort(key=itemgetter(0))
 
-		# os.chdir(TEST_P + '\\' + LEFT_F + '\\' + DATA_F)
-		# np.save('right_ball_candidates.npy', ball_candidates_out)
+		os.chdir(TEST_P + '\\' + LEFT_F + '\\' + DATA_F)
+		np.save('left_ball_candidates.npy', ball_candidates_out)
 
-		os.chdir(TEST_P + '\\' + LEFT_F + '\\' + DATA_F + '\\' + active_test_dir)
-		points = np.load("points_full.npy", allow_pickle=True)
+		# os.chdir(TEST_P + '\\' + LEFT_F + '\\' + DATA_F + '\\' + active_test_dir)
+		# points = np.load("points_full.npy", allow_pickle=True)
 		# make video from image dif
 		img_list = []
 		C_list = []
 
 		os.chdir(TEST_P + '\\' + LEFT_F + '\\' + OUT_F + '\\' + active_test_dir)
 		im_names = os.listdir()
-		print(len(im_names))
 		pos = 0
 		dist = 5
 		for im in im_names:
@@ -274,22 +273,22 @@ if __name__ == "__main__":
 			else:
 				img = cv2.imread(im)
 				img_list.append(img)
-				num_c = len(ball_candidates_out[pos][1])
-				num_true = 0
-				num_balls = 0
-				num_false = 0
-				if points[pos,0,0] is not None:
-					num_balls = 1
-				for cand in ball_candidates_out[pos][1]:
-					# print(points[pos,0,0])
-					if points[pos,0,0] is not None:
-						if np.sqrt((cand[X]-points[pos,0,0])**2+(cand[Y]-points[pos,0,1])**2) <= dist:
-							num_true += 1
-							num_false = num_c-num_true
-					else:
-						num_false = num_c
+				# num_c = len(ball_candidates_out[pos][1])
+				# num_true = 0
+				# num_balls = 0
+				# num_false = 0
+				# if points[pos,0,0] is not None:
+				# 	num_balls = 1
+				# for cand in ball_candidates_out[pos][1]:
+				# 	# print(points[pos,0,0])
+				# 	if points[pos,0,0] is not None:
+				# 		if np.sqrt((cand[X]-points[pos,0,0])**2+(cand[Y]-points[pos,0,1])**2) <= dist:
+				# 			num_true += 1
+				# 			num_false = num_c-num_true
+				# 	else:
+				# 		num_false = num_c
 				# if pos%4 == 0:
-				print(f"{num_balls}	{num_true}	{num_false}")
+				# print(f"{num_balls}	{num_true}	{num_false}")
 					# print(f"{len(ball_candidates_out[pos][1])}")
 					# if pos>=136:
 					# 	cv2.imshow(f"{pos}", img)

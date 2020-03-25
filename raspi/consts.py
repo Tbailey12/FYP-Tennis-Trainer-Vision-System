@@ -14,14 +14,16 @@ PORT = 1234
 
 CHUNK_SIZE = 4096
 REC_T = 1					# default recording time
-REC_T_MAX = 5		# maximum recording time
+REC_T_MAX = 5				# maximum recording time
 CALIB_T = 10  				# number of calibration images to take
 CALIB_IMG_DELAY = 1 		# seconds between each image
 STREAM_MAX = 60 			# maximum time for a stream
 
 ## -- Camera consts -- ##
-FRAMERATE = 60
+FRAMERATE = 90
 RESOLUTION = (640,480)
+# RESOLUTION = (1280, 720)
+ISO = 400
 
 ## -- Processing consts -- ##
 N_PROCESSORS = 4
@@ -31,6 +33,7 @@ N_OBJECTS = 100
 SIZE = 2
 X_COORD = 3
 Y_COORD = 4
+LPF_THRESH = 150
 
 ## -- LED consts -- ##
 LED_F_MAX = 60				# max LED frequency
@@ -74,7 +77,7 @@ CALIB_IMG_S = 'calib_S'
 
 ## -- Active calibration consts -- ##
 ACTIVE_CALIB_F = '2020-03-12_calib2'		# directory containing L,R calib
-ACTIVE_STEREO_F = '0.4545stereo_calib.npy'	# filename of stereo calib
+ACTIVE_STEREO_F = '0.4485stereo_calib.npy'	# filename of stereo calib
 
 import os
 ROOT_P = os.getcwd()
