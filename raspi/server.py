@@ -8,7 +8,7 @@ import time
 import sys
 from datetime import datetime
 
-import cv2 as cv
+import cv2
 
 import consts as c
 import socket_funcs as sf
@@ -20,6 +20,7 @@ import queue
 
 import numpy as np
 import os
+import timeit
 
 def send_to_client(client_name, message):
     for client_socket in sockets_list:
@@ -110,10 +111,97 @@ def initialise():
             print('both clients connected')
             return True
 
+def rectify_points(ball_set, camera_matrix, dist_coeffs, R_matrix, P_matrix):
+    for ball in range(len(ball_set)):
+        ball_set[ball][c.X_COORD:(c.Y_COORD+1)] = cv2.undistortPoints(ball_set[ball][c.X_COORD:(c.Y_COORD+1)], camera_matrix, dist_coeffs, R=R_matrix, P=P_matrix).flatten()
+
+def triangulate_balls(stereo_calib, left_balls, right_balls):
+    X_W = 0
+    Y_W = 1
+    W_W = 0.5
+    H_W = 0.5
+    SIZE_W = 0.75
+
+    candidates_3D = 1000*[None]
+    
+    start = timeit.default_timer()
+    # similarity comparison
+    for k in range(min(len(left_balls),len(right_balls))):
+        print(k)
+        # if there are no ball candidates from either camera, skip frame
+        if (len(left_balls[k]) == 0) or (len(right_balls[k]) == 0):
+            candidates_3D[k] = []
+            continue
+
+        # loop through left and right candidates
+        for i, c_l in enumerate(left_balls[k]):
+            max_sim = 0
+            for j, c_r in enumerate(right_balls[k]):
+                width_r = c_l[c.WIDTH]/c_r[c.WIDTH]
+                size_r = c_l[c.SIZE]/c_r[c.SIZE]
+                height_r = c_l[c.HEIGHT]/c_r[c.HEIGHT]
+
+                if width_r<1: width_r=1/width_r
+                if size_r<1: size_r=1/size_r
+                if height_r<1: height_r=1/height_r
+
+
+                calc_b = (  SIZE_W*(size_r)**2 +\
+                                W_W*(width_r)**2 +\
+                                H_W*(height_r)**2 +\
+                                X_W*(c_l[c.X_COORD]-c_r[c.X_COORD])**2 +\
+                                Y_W*(c_l[c.Y_COORD]-c_r[c.Y_COORD])**2 )
+                if calc_b != 0:
+                    sim = 1/calc_b
+                else:
+                    sim = np.Inf
+                
+                if sim>max_sim:
+                    r_match = j
+                    max_sim = sim
+
+            # highest similarity between left candidate and right candidates is used
+            # r_match = np.where(sim[i]==np.amax(sim[i]))[0][0]
+            # if r_match in matched:
+            #   break
+            # matched.append(r_match)
+
+            ## -- Triangulate points in 3D space -- ##
+            points4d = cv2.triangulatePoints(stereo_calib.P1,stereo_calib.P2,\
+                                                (left_balls[k][i][c.X_COORD],left_balls[k][i][c.Y_COORD]),\
+                                                (right_balls[k][r_match][c.X_COORD],right_balls[k][r_match][c.Y_COORD]))
+                
+            ## -- Convert homogeneous coordinates to Euclidean space -- ##
+            candidates_3D[k] = np.array([points4d[:3]/points4d[3] for i in points4d[:3]])   
+
+    candidates_3D = [x for x in candidates_3D if x is not None]
+    print((timeit.default_timer()-start))
+
+    import matplotlib.pyplot as plt
+    from mpl_toolkits.mplot3d import Axes3D
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
+    ax.set_xlabel('x (m)')
+    ax.set_ylabel('y (m)')
+    ax.set_zlabel('z (m)')
+    ax.set_xlim(-1, 1)
+    ax.set_ylim(0, 1)
+    ax.set_zlim(0, 3)
+
+    # os.chdir("plots")
+
+    for point in candidates_3D:
+        if len(point) > 0 and point.item(2)>0:
+            ax.scatter(xs=point.item(0)-(25E-2/2),ys=point.item(2),zs=-point.item(1))
+        # plt.savefig(f"{frame:04d}.png")
+    plt.show()
+
+    np.save("points_3d.npy", candidates_3D)
 
 def record(stereo_calib = None, record_time = c.REC_T):
-    # if stereo_calib is None:
-    #     print('stereo cameras must first be calibrated')
+    if stereo_calib is None:
+        print('stereo cameras must first be calibrated')
+        return False
 
     message_list = []
     pos = 0
@@ -124,8 +212,8 @@ def record(stereo_calib = None, record_time = c.REC_T):
     left_frame = 0
 
     ##################### TESTING #####################
-    left_balls = []
-    right_balls = []
+    left_balls = 1000*[None]
+    right_balls = 1000*[None]
     # right_done = True
     ####################################################
 
@@ -134,6 +222,8 @@ def record(stereo_calib = None, record_time = c.REC_T):
     send_to_client(c.RIGHT_CLIENT, rec_obj)
     ####################################################
     ####################################################
+    left_frame_tot = 0
+    right_frame_tot = 0
 
     while True:
         message_list.extend(read_all_client_messages())
@@ -142,10 +232,20 @@ def record(stereo_calib = None, record_time = c.REC_T):
                 # print(message_list[pos]['data'].message[0])
                 if message_list[pos]['client'] == c.LEFT_CLIENT:
                     left_frame = message_list[pos]['data'].message[0]
-                    left_balls.append(message_list[pos]['data'].message)
+                    # left_balls.append(message_list[pos]['data'].message)
+                    left_balls[left_frame] = message_list[pos]['data'].message[1]
+                    rectify_points(left_balls[left_frame], stereo_calib.cameraMatrix1, stereo_calib.distCoeffs1, stereo_calib.R1, stereo_calib.P1)
+                    if left_frame>left_frame_tot:
+                        left_frame_tot = left_frame
+
                 elif message_list[pos]['client'] == c.RIGHT_CLIENT:
                     right_frame = message_list[pos]['data'].message[0]
-                    right_balls.append(message_list[pos]['data'].message)
+                    # right_balls.append(message_list[pos]['data'].message)
+                    right_balls[right_frame] = message_list[pos]['data'].message[1]
+                    rectify_points(right_balls[right_frame], stereo_calib.cameraMatrix2, stereo_calib.distCoeffs2, stereo_calib.R2, stereo_calib.P2)
+                    if right_frame>right_frame_tot:
+                        right_frame_tot = right_frame
+
 
             elif message_list[pos]['data'].type == c.TYPE_DONE:
                 if message_list[pos]['client'] == c.LEFT_CLIENT:
@@ -154,11 +254,15 @@ def record(stereo_calib = None, record_time = c.REC_T):
                     right_done = True
                 if left_done and right_done:
                     print('recording finished')
-                    print(f"left frames: {left_frame}")
-                    print(f"right frames: {right_frame}")
+                    print(f"left frames: {left_frame_tot}")
+                    print(f"right frames: {right_frame_tot}")
 
                     ##################### TESTING #####################
+                    right_balls = [x for x in right_balls if x is not None]
+                    left_balls = [x for x in left_balls if x is not None]
 
+                    triangulate_balls(stereo_calib, left_balls, right_balls)
+                
                     np.save('left_ball_candidates.npy', left_balls)
                     np.save('right_ball_candidates.npy', right_balls)
                     ###################################################
@@ -210,28 +314,28 @@ def stream(run_time = c.CALIB_T, calibrate = False, display = False, timeout = F
                         left_stream_imgs.append((n_frame, y_data))
                     elif message_list[pos]['client'] == c.RIGHT_CLIENT:                    
                         right_stream_imgs.append((n_frame, y_data))
-                    # cv.imwrite(f"{message_list[pos]['client']}{n_frame}.png",y_data)
+                    # cv2.imwrite(f"{message_list[pos]['client']}{n_frame}.png",y_data)
 
                     if display:
                         if (len(left_stream_imgs) > disp_n_frame) and (len(right_stream_imgs) > disp_n_frame): 
                             
                             ########## FOR TESTING ##############
                             os.chdir(c.IMG_P)
-                            cv.imwrite(f"l_{(disp_n_frame):04d}.png",left_stream_imgs[disp_n_frame][1])
-                            cv.imwrite(f"r_{(disp_n_frame):04d}.png",right_stream_imgs[disp_n_frame][1])
+                            cv2.imwrite(f"l_{(disp_n_frame):04d}.png",left_stream_imgs[disp_n_frame][1])
+                            cv2.imwrite(f"r_{(disp_n_frame):04d}.png",right_stream_imgs[disp_n_frame][1])
                             os.chdir(c.ROOT_P)
                             ########## FOR TESTING ##############
 
-                            disp_frame = cv.hconcat([left_stream_imgs[disp_n_frame][1],right_stream_imgs[disp_n_frame][1]])
-                            cv.imshow(f"stream", disp_frame)
+                            disp_frame = cv2.hconcat([left_stream_imgs[disp_n_frame][1],right_stream_imgs[disp_n_frame][1]])
+                            cv2.imshow(f"stream", disp_frame)
                             print(disp_n_frame)
-                            cv.waitKey(100)
+                            cv2.waitKey(100)
                             if left_stream_imgs[disp_n_frame][0] >=stopframe and timeout:
                                 done_obj = sf.MyMessage(c.TYPE_DONE, 1)
                                 send_to_client(c.LEFT_CLIENT, done_obj)
                                 send_to_client(c.RIGHT_CLIENT, done_obj)
                                 done = True
-                                cv.destroyAllWindows()
+                                cv2.destroyAllWindows()
                             
                             disp_n_frame += 1
 
@@ -249,7 +353,7 @@ def stream(run_time = c.CALIB_T, calibrate = False, display = False, timeout = F
                         send_to_client(c.RIGHT_CLIENT, done_obj)
                         if display: 
                             done = True
-                            cv.destroyAllWindows()
+                            cv2.destroyAllWindows()
 
                 # when both clients send the done message, they are finished collecting frames
                 elif (message_list[pos]['data'].type == c.TYPE_DONE):
@@ -277,7 +381,7 @@ def stream(run_time = c.CALIB_T, calibrate = False, display = False, timeout = F
                                 left_chessboards, right_chessboards, left_cal, right_cal, img_size)
     
                             # obtain stereo rectification projection matrices
-                            R1, R2, P1, P2, Q, validPixROI1, validPixROI2 = cv.stereoRectify(cameraMatrix1, distCoeffs1,
+                            R1, R2, P1, P2, Q, validPixROI1, validPixROI2 = cv2.stereoRectify(cameraMatrix1, distCoeffs1,
                                                         cameraMatrix2, distCoeffs2, img_size, R, T)
 
                             # save all calibration params to object

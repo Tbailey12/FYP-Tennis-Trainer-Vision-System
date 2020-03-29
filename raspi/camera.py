@@ -136,7 +136,7 @@ def ImageProcessor(unprocessed_frames, processed_frames, proc_complete, event_ma
                 B_old = np.copy(B)
                 # B = np.logical_or((y_data > (img_mean + 2*img_std)),
                                   # (y_data < (img_mean - 2*img_std)))  # foreground new
-                np.multiply(img_std,3,out=B_1_std)
+                np.multiply(img_std,2,out=B_1_std)
                 np.add(B_1_std,img_mean,out=B_1_mean)
                 B_greater = np.greater(y_data,B_1_mean)
                 np.subtract(img_mean,B_1_std,out=B_2_mean)
@@ -163,16 +163,16 @@ def ImageProcessor(unprocessed_frames, processed_frames, proc_complete, event_ma
                 processed_frames.put((n_frame, ball_candidates))
 
                 ########## FOR TESTING ##############
-                # C_temp = cv2.cvtColor(C, cv2.COLOR_GRAY2RGB)
-                # img_temp = cv2.cvtColor(y_data, cv2.COLOR_GRAY2RGB)
-                # ball_candidates = ball_candidates.astype(int)
-                # for ball in ball_candidates:
-                #     cv2.drawMarker(C_temp,(ball[c.X_COORD],ball[c.Y_COORD]),(0, 0, 255),cv2.MARKER_CROSS,thickness=2,markerSize=10)
-                #     cv2.drawMarker(img_temp,(ball[c.X_COORD],ball[c.Y_COORD]),(0, 0, 255),cv2.MARKER_CROSS,thickness=2,markerSize=10)
+                C_temp = cv2.cvtColor(C, cv2.COLOR_GRAY2RGB)
+                img_temp = cv2.cvtColor(y_data, cv2.COLOR_GRAY2RGB)
+                ball_candidates = ball_candidates.astype(int)
+                for ball in ball_candidates:
+                    cv2.drawMarker(C_temp,(ball[c.X_COORD],ball[c.Y_COORD]),(0, 0, 255),cv2.MARKER_CROSS,thickness=2,markerSize=10)
+                    cv2.drawMarker(img_temp,(ball[c.X_COORD],ball[c.Y_COORD]),(0, 0, 255),cv2.MARKER_CROSS,thickness=2,markerSize=10)
                 
-                # save_arr = True
-                # img_array.append((n_frame, y_data))
-                # C_array.append(C_temp)
+                save_arr = True
+                img_array.append((n_frame, y_data))
+                C_array.append(C_temp)
 
                 total_time += (time.time_ns()-start)
                 total_frames += 1
@@ -190,20 +190,20 @@ def ImageProcessor(unprocessed_frames, processed_frames, proc_complete, event_ma
                         print((total_time/total_frames)/1E6)
                         total_frames = 0
                         total_time = 0
-                    # if img_array is not None and save_arr:
-                    #     for i,img in enumerate(img_array):
-                    #         frame, data = img
-                    #         os.chdir(c.IMG_P)
-                    #         cv2.imwrite(f"{frame:04d}.png",data)
-                    #         # os.chdir(c.ROOT_P)
-                    #         cv2.imwrite(f"C{frame:04d}.png",C_array[i])
-                    #     os.chdir(c.DATA_P)
-                    #     np.save('img_mean',mean_data)
-                    #     np.save('img_std', std_data)
-                    #     os.chdir(c.ROOT_P)
-                    #     img_array = []
-                    #     C_array = []
-                    #     save_arr = False
+                    if img_array is not None and save_arr:
+                        for i,img in enumerate(img_array):
+                            frame, data = img
+                            os.chdir(c.IMG_P)
+                            cv2.imwrite(f"{frame:04d}.png",data)
+                            # os.chdir(c.ROOT_P)
+                            cv2.imwrite(f"C{frame:04d}.png",C_array[i])
+                        os.chdir(c.DATA_P)
+                        np.save('img_mean',mean_data)
+                        np.save('img_std', std_data)
+                        os.chdir(c.ROOT_P)
+                        img_array = []
+                        C_array = []
+                        save_arr = False
                     ######### FOR TESTING ##############
 
 

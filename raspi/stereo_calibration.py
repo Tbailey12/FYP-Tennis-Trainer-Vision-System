@@ -110,7 +110,7 @@ def load_calibs():
 
 def save_calib(calib, camera_name):
 	os.chdir(c.DATA_P)
-	cal.save_params(f"{cal.rms:0.4f}{camera_name}")
+	calib.save_params(f"{calib.rms:0.4f}{camera_name}")
 	os.chdir(c.ROOT_P)
 
 def load_stereo_calib():
@@ -143,6 +143,7 @@ def process_image(img_data, pattern_points):
 		cv2.cornerSubPix(img, corners, (5, 5), (-1, -1), term)
 
 	if not found:
+		print(n_frame)
 		print('chessboard not found')
 		return None
 
@@ -170,19 +171,32 @@ def find_chessboards(img_data):
 ## - removes the board from the array if there is no matching chessboard
 def validate_chessboards(left_chessboards, right_chessboards):
 	if len(left_chessboards) > 0 and len(right_chessboards) > 0:
-		for i, chessboard_L in enumerate(left_chessboards):
-			if chessboard_L[0] == right_chessboards[i][0]:
-				# chessboard was found in both cameras
-				continue
-			elif chessboard_L[0] > right_chessboards[i][0]:
+
+		max_len = min(len(left_chessboards), len(right_chessboards))
+		left_chessboards = left_chessboards[:max_len]
+		right_chessboards = right_chessboards[:max_len]
+
+		i = 0
+		while True:
+			if left_chessboards[i][0] == right_chessboards[i][0]:
+				pass
+			elif left_chessboards[i][0] > right_chessboards[i][0]:
 				# the chessboard was found in the right cam but not the left
 				print('missing left chessboard')
 				del right_chessboards[i]
-			elif chessboard_L[0] < right_chessboards[i][0]:
+			elif left_chessboards[i][0] < right_chessboards[i][0]:
 				# the chessboard was found in the left cam but not the right
 				print('missing right chessboard')
 				del left_chessboards[i]
-		return True
+			i+=1
+			if len(left_chessboards[i:]) > 0 and len(right_chessboards[i:]) >0:
+				continue
+			else:
+				left_chessboards = left_chessboards[:i]
+				right_chessboards = right_chessboards[:i]
+				break
+
+		return left_chessboards, right_chessboards
 	return False
 
 def calibrate_stereo(left_chessboards, right_chessboards, left_cam, right_cam, size):
@@ -248,21 +262,23 @@ def calibrate_stereo_local():
 	## -- Load all images in for testing -- ##
 
 	for img_name in img_list:
-		if c.LEFT_CLIENT in img_name:
+		if 'l' in img_name:
 			img = cv2.imread(img_name, cv2.IMREAD_GRAYSCALE)
-			frame_n = img_name[len(c.LEFT_CLIENT):-4]
+			frame_n = img_name[2:-4]
 			left_img_data.append((frame_n, img))
 
-		elif c.RIGHT_CLIENT in img_name:
+		elif 'r' in img_name:
 			img = cv2.imread(img_name, cv2.IMREAD_GRAYSCALE)
-			frame_n = img_name[len(c.RIGHT_CLIENT):-4]
+			frame_n = img_name[2:-4]
 			right_img_data.append((frame_n, img))
 
 	## -- Find chessboards in images -- ##
+	print('left')
 	left_chessboards = find_chessboards(left_img_data)
+	print('right')
 	right_chessboards = find_chessboards(right_img_data)
 
-	if not validate_chessboards(left_chessboards, right_chessboards): return None
+	left_chessboards, right_chessboards = validate_chessboards(left_chessboards, right_chessboards)
 
 	## -- Load camera data -- ##
 	left_cal, right_cal = load_calibs()
@@ -308,6 +324,9 @@ def calibrate_stereo_local():
 
 
 if __name__ == "__main__":
+	# print(generate_pattern_points())
+	# calibrate_mono_local('calib_R.npy','calib_R')
+	# calibrate_mono_local('calib_L.npy','calib_L')
 	calibrate_stereo_local()
 	# left_calib, right_calib = load_calibs()
 	# print(left_calib.rms)

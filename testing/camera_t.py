@@ -9,7 +9,7 @@ from operator import itemgetter
 TEST_F = 'stereo_tests'
 IMG_F = 'img'
 DATA_F = 'data'
-LEFT_F = 'right'
+LEFT_F = 'left'
 RIGHT_F = 'right'
 OUT_F = 'out'
 # ACTIVE_TEST_F = '2020-03-12_outside_shot_2'
@@ -308,6 +308,7 @@ if __name__ == "__main__":
 		out = cv2.VideoWriter(output, fourcc, 30, (w,h*2))
 
 		for i, img in enumerate(img_list):
+			print(i)
 			out_img = cv2.vconcat([img,C_list[i]])
 			out.write(out_img)
 

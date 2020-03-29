@@ -9,7 +9,7 @@ RIGHT_CLIENT = 'right'
 ## -- Socket consts -- ##
 SOCKET_TIMEOUT = 5
 HEADER_LENGTH = 24
-IP = "192.168.20.11"		# server IP address
+IP = "192.168.20.7"		# server IP address
 PORT = 1234 
 
 CHUNK_SIZE = 4096
@@ -30,10 +30,12 @@ N_PROCESSORS = 4
 LEARNING_RATE = 0.15
 BACKGROUND_RATE = 30
 N_OBJECTS = 100
+WIDTH = 0
+HEIGHT = 1
 SIZE = 2
 X_COORD = 3
 Y_COORD = 4
-LPF_THRESH = 150
+LPF_THRESH = 170
 
 ## -- LED consts -- ##
 LED_F_MAX = 60				# max LED frequency
@@ -76,8 +78,8 @@ CALIB_IMG_R = 'calib_R'
 CALIB_IMG_S = 'calib_S'
 
 ## -- Active calibration consts -- ##
-ACTIVE_CALIB_F = '2020-03-12_calib2'		# directory containing L,R calib
-ACTIVE_STEREO_F = '0.4485stereo_calib.npy'	# filename of stereo calib
+ACTIVE_CALIB_F = '2020-03-27_new_img'			# directory containing L,R calib
+ACTIVE_STEREO_F = '0.8524stereo_calib.npy'	# filename of stereo calib
 
 import os
 ROOT_P = os.getcwd()
