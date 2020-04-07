@@ -113,7 +113,7 @@ def initialise():
 
 def rectify_points(ball_set, camera_matrix, dist_coeffs, R_matrix, P_matrix):
     for ball in range(len(ball_set)):
-        ball_set[ball][c.X_COORD:(c.Y_COORD+1)] = cv2.undistortPoints(ball_set[ball][c.X_COORD:(c.Y_COORD+1)], camera_matrix, dist_coeffs, R=R_matrix, P=P_matrix).flatten()
+        ball_set[ball][c.X_COORD:c.Y_COORD+1] = cv2.undistortPoints(ball_set[ball][c.X_COORD:c.Y_COORD+1], camera_matrix, dist_coeffs, R=R_matrix, P=P_matrix).flatten()
 
 def triangulate_balls(stereo_calib, left_balls, right_balls):
     X_W = 0

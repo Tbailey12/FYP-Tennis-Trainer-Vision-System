@@ -6,9 +6,10 @@ import queue
 import numpy as np
 from operator import itemgetter
 
-TEST_F = 'stereo_tests'
+TEST_F = 'inside_tests'
 IMG_F = 'img'
 DATA_F = 'data'
+CAM_F = 'left'
 LEFT_F = 'left'
 RIGHT_F = 'right'
 OUT_F = 'out'
@@ -30,16 +31,6 @@ SIZE = 2
 X = 3
 Y = 4
 
-# kernel = np.array([	[0,1,0],
-# 					[1,1,1],
-# 					[0,1,0]], dtype=np.uint8)
-
-# kernel1 = np.array([[0,0,1,0,0],
-# 					[0,1,1,1,0],
-# 					[1,1,1,1,1],
-# 					[0,1,1,1,0],
-# 					[0,0,1,0,0]], dtype=np.uint8)
-
 kernel = np.ones((2,2), dtype=np.uint8)
 
 kernel1 = np.ones((3,3), dtype=np.uint8)
@@ -58,6 +49,42 @@ kernelc5 = np.array([[0,0,1,0,0],
 					[0,1,1,1,0],
 					[0,0,1,0,0]], dtype=np.uint8)
 
+def get_std_mean(img_f, active_test_dir):
+	os.chdir(TEST_P + '\\' + img_f + '\\' + IMG_F + '\\' + active_test_dir)
+	
+	img_mean = np.zeros([h,w],dtype=np.float32)
+	img_std = np.zeros([h,w], dtype=np.float32)
+	mean_1 = np.zeros([h,w],dtype=np.float32)
+	mean_2 = np.zeros([h,w],dtype=np.float32)
+	std_1 = np.zeros([h,w],dtype=np.float32)
+	std_2 = np.zeros([h,w],dtype=np.float32)
+	std_3 = np.zeros([h,w],dtype=np.float32)
+	std_4 = np.zeros([h,w],dtype=np.float32)
+	std_5 = np.zeros([h,w],dtype=np.float32)
+	std_6 = np.zeros([h,w],dtype=np.float32)
+
+	for file in os.listdir()[:14]:
+		y_data = cv2.imread(file, cv2.IMREAD_GRAYSCALE)
+		
+		# calculate new std deviation and mean
+		# y_data = np.bitwise_and(y_data, np.invert(C))
+		# img_mean = (1 - p) * img_mean + p * y_data  # calculate mean
+		np.multiply(1-p,img_mean,out=mean_1)
+		np.multiply(p,y_data,out=mean_2)
+		np.add(mean_1,mean_2,out=img_mean)
+		
+		# img_std = np.sqrt((1 - p) * (img_std ** 2) + p * ((y_data - img_mean) ** 2))  # calculate std deviation
+		np.square(img_std,out=std_1)
+		np.multiply(1-p,std_1,out=std_2)
+		np.subtract(y_data,img_mean,out=std_3)
+		np.square(std_3,out=std_4)
+		np.multiply(p,std_4,out=std_5)
+		np.add(std_2,std_5,out=std_6)
+		np.sqrt(std_6,out=img_std)
+
+	os.chdir(TEST_P + '\\' + img_f + '\\' + DATA_F + '\\' + active_test_dir)
+	# np.save('img_mean.npy', img_mean)
+	# np.save('img_std.npy', img_std)
 
 def process_img(img_f, img_queue, active_test_dir, out_q):
 	os.chdir(TEST_P + '\\' + img_f + '\\' + DATA_F + '\\' + active_test_dir)
@@ -72,16 +99,6 @@ def process_img(img_f, img_queue, active_test_dir, out_q):
 	B_greater = np.zeros([h,w],dtype=np.uint8)
 	B_2_mean = np.zeros([h,w],dtype=np.float32)
 	B_less = np.zeros([h,w],dtype=np.uint8)
-
-	mean_1 = np.zeros([h,w],dtype=np.float32)
-	mean_2 = np.zeros([h,w],dtype=np.float32)
-
-	std_1 = np.zeros([h,w],dtype=np.float32)
-	std_2 = np.zeros([h,w],dtype=np.float32)
-	std_3 = np.zeros([h,w],dtype=np.float32)
-	std_4 = np.zeros([h,w],dtype=np.float32)
-	std_5 = np.zeros([h,w],dtype=np.float32)
-	std_6 = np.zeros([h,w],dtype=np.float32)
 
 	img_mean = np.load(IMG_MEAN_F)
 	img_std = np.load(IMG_STD_F)
@@ -111,44 +128,11 @@ def process_img(img_f, img_queue, active_test_dir, out_q):
 			A = np.invert(np.logical_and(B_old, B))  # difference between prev foreground and new foreground
 			C = np.logical_and(A, B)   # different from previous frame and part of new frame
 
-
 			# C = B
 			C = 255*C.astype(np.uint8)
 			C = cv2.filter2D(C, ddepth = -1, kernel=(1/16)*kernel2)
 			C[C<150] = 0
 			C[C>=150] = 255
-
-			# C = cv2.morphologyEx(C, cv2.MORPH_CLOSE, kernelt3, iterations=1)
-			# C = cv2.erode(C, kernelc5, iterations=1)
-
-			# C = cv2.morphologyEx(C, cv2.MORPH_CLOSE, kernelt3, iterations=1)
-			# C = cv2.erode(C, kernelc5, iterations=1)
-			# C = cv2.dilate(C, kernel, iterations=1)
-			# C = cv2.dilate(C, kernel, iterations=1)
-
-			# C = cv2.erode(C, kernelc5, iterations=1)
-			# for i in ec_order:
-			# 	if i == 'e':
-			# 		C = cv2.erode(C, k1, iterations=1)
-			# 	elif i == 'c':
-			# 		C = cv2.morphologyEx(C, cv2.MORPH_CLOSE, k2, iterations=1)
-
-
-			# calculate new std deviation and mean
-			# y_data = np.bitwise_and(y_data, np.invert(C))
-			# img_mean = (1 - p) * img_mean + p * y_data  # calculate mean
-			# np.multiply(1-p,img_mean,out=mean_1)
-			# np.multiply(p,y_data,out=mean_2)
-			# np.add(mean_1,mean_2,out=img_mean)
-			
-			# img_std = np.sqrt((1 - p) * (img_std ** 2) + p * ((y_data - img_mean) ** 2))  # calculate std deviation
-			# np.square(img_std,out=std_1)
-			# np.multiply(1-p,std_1,out=std_2)
-			# np.subtract(y_data,img_mean,out=std_3)
-			# np.square(std_3,out=std_4)
-			# np.multiply(p,std_4,out=std_5)
-			# np.add(std_2,std_5,out=std_6)
-			# np.sqrt(std_6,out=img_std)
 
 			## -- object detection -- ##
 			n_features_cv, labels_cv, stats_cv, centroids_cv = cv2.connectedComponentsWithStats(C, connectivity=4)
@@ -210,9 +194,9 @@ if __name__ == "__main__":
 	ball_candidates_out = []
 
 	# get list of test data directories
-	os.chdir(TEST_P + '\\' + LEFT_F + '\\' + DATA_F)
+	os.chdir(TEST_P + '\\' + CAM_F + '\\' + IMG_F)
 	test_directories = os.listdir()
-	os.chdir(TEST_P + '\\' + LEFT_F + '\\' + OUT_F)
+	os.chdir(TEST_P + '\\' + CAM_F + '\\' + OUT_F)
 	for directory in test_directories:
 		try:
 			os.mkdir(directory)
@@ -221,20 +205,25 @@ if __name__ == "__main__":
 
 	# directory = test_directories[4]
 	# print(directory)
-	for directory in test_directories[4:5]:
+	for directory in test_directories:
+
+
 		active_test_dir = str(directory)
 		process_list = []
 		queue_list = []
 		out_q = mp.JoinableQueue()
+
+		# get_std_mean(LEFT_F, active_test_dir)
+		# get_std_mean(RIGHT_F, active_test_dir)
  
 		for i in range(NUM_PROCESSORS):
 			q = mp.JoinableQueue()
 			queue_list.append(q)
-			proc = mp.Process(target=process_img, args=(LEFT_F, q, active_test_dir, out_q))
+			proc = mp.Process(target=process_img, args=(CAM_F, q, active_test_dir, out_q))
 			proc.start()
 			process_list.append(proc)
 
-		read_img_proc = mp.Process(target=read_img, args=(LEFT_F, queue_list, active_test_dir))
+		read_img_proc = mp.Process(target=read_img, args=(CAM_F, queue_list, active_test_dir))
 		read_img_proc.start()
 
 
@@ -251,18 +240,19 @@ if __name__ == "__main__":
 				break
 		
 		# sort all the ball candidates
-		# ball_candidates_out.sort(key=itemgetter(0))
+		ball_candidates_out.sort(key=itemgetter(0))
 
-		os.chdir(TEST_P + '\\' + LEFT_F + '\\' + DATA_F)
-		np.save('left_ball_candidates.npy', ball_candidates_out)
+		os.chdir(TEST_P + '\\' + CAM_F + '\\' + DATA_F + '\\' + active_test_dir)
+		np.save(CAM_F+'_ball_candidates.npy', ball_candidates_out)
+		ball_candidates_out = []
 
-		# os.chdir(TEST_P + '\\' + LEFT_F + '\\' + DATA_F + '\\' + active_test_dir)
+		# os.chdir(TEST_P + '\\' + CAM_F + '\\' + DATA_F + '\\' + active_test_dir)
 		# points = np.load("points_full.npy", allow_pickle=True)
 		# make video from image dif
 		img_list = []
 		C_list = []
 
-		os.chdir(TEST_P + '\\' + LEFT_F + '\\' + OUT_F + '\\' + active_test_dir)
+		os.chdir(TEST_P + '\\' + CAM_F + '\\' + OUT_F + '\\' + active_test_dir)
 		im_names = os.listdir()
 		pos = 0
 		dist = 5
@@ -301,7 +291,7 @@ if __name__ == "__main__":
 		# for im in im_names:
 		# 	C_list.append(cv2.imread(im))
 
-		os.chdir(TEST_P + '\\' + LEFT_F + '\\' + OUT_F)
+		os.chdir(TEST_P + '\\' + CAM_F + '\\' + OUT_F)
 		
 		output = f"{active_test_dir}.mp4"
 		fourcc = cv2.VideoWriter_fourcc(*'mp4v')

@@ -9,14 +9,14 @@ RIGHT_CLIENT = 'right'
 ## -- Socket consts -- ##
 SOCKET_TIMEOUT = 5
 HEADER_LENGTH = 24
-IP = "192.168.20.7"		# server IP address
+IP = "192.168.20.5"		# server IP address
 PORT = 1234 
 
 CHUNK_SIZE = 4096
 REC_T = 1					# default recording time
 REC_T_MAX = 5				# maximum recording time
 CALIB_T = 10  				# number of calibration images to take
-CALIB_IMG_DELAY = 1 		# seconds between each image
+CALIB_IMG_DELAY = 2 		# seconds between each image
 STREAM_MAX = 60 			# maximum time for a stream
 
 ## -- Camera consts -- ##
@@ -60,8 +60,9 @@ TYPE_STREAM = "stream"
 ## -- Calibration consts -- ##
 SENSOR_SIZE = (3.68, 2.76)	# size of the image sensor on the camera
 SQUARE_SIZE = 23.4E-3		# size of squares on the chessboard
+# SQUARE_SIZE = 1/3			# size of squares on the chessboard
 PATTERN_SIZE = (9, 6)  		# number of points (where the black and white intersects)
-MIN_PATTERNS = 25
+MIN_PATTERNS = 15
 
 ## -- Filename consts -- ##
 STEREO_CALIB_F = 'stereo_calib.npy'
@@ -78,8 +79,9 @@ CALIB_IMG_R = 'calib_R'
 CALIB_IMG_S = 'calib_S'
 
 ## -- Active calibration consts -- ##
-ACTIVE_CALIB_F = '2020-03-27_new_img'			# directory containing L,R calib
-ACTIVE_STEREO_F = '0.8524stereo_calib.npy'	# filename of stereo calib
+# ACTIVE_CALIB_F = '2020-03-27_new_img'			# directory containing L,R calib
+ACTIVE_CALIB_F = '2020-04-03_calib'
+ACTIVE_STEREO_F = '0.3071stereo_calib.npy'	# filename of stereo calib
 
 import os
 ROOT_P = os.getcwd()

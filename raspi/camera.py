@@ -195,7 +195,6 @@ def ImageProcessor(unprocessed_frames, processed_frames, proc_complete, event_ma
                             frame, data = img
                             os.chdir(c.IMG_P)
                             cv2.imwrite(f"{frame:04d}.png",data)
-                            # os.chdir(c.ROOT_P)
                             cv2.imwrite(f"C{frame:04d}.png",C_array[i])
                         os.chdir(c.DATA_P)
                         np.save('img_mean',mean_data)

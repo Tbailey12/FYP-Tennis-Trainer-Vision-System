@@ -176,27 +176,21 @@ def validate_chessboards(left_chessboards, right_chessboards):
 		left_chessboards = left_chessboards[:max_len]
 		right_chessboards = right_chessboards[:max_len]
 
-		i = 0
-		while True:
-			if left_chessboards[i][0] == right_chessboards[i][0]:
-				pass
-			elif left_chessboards[i][0] > right_chessboards[i][0]:
-				# the chessboard was found in the right cam but not the left
-				print('missing left chessboard')
-				del right_chessboards[i]
-			elif left_chessboards[i][0] < right_chessboards[i][0]:
-				# the chessboard was found in the left cam but not the right
-				print('missing right chessboard')
-				del left_chessboards[i]
-			i+=1
-			if len(left_chessboards[i:]) > 0 and len(right_chessboards[i:]) >0:
-				continue
-			else:
-				left_chessboards = left_chessboards[:i]
-				right_chessboards = right_chessboards[:i]
-				break
+		new_left_chessboards = []
+		new_right_chessboards = []
 
-		return left_chessboards, right_chessboards
+		for i, left_chessboard in enumerate(left_chessboards):
+			if left_chessboards[i][0] == right_chessboards[i][0]:
+				new_left_chessboards.append(left_chessboards[i])
+				new_right_chessboards.append(right_chessboards[i])
+
+			else:
+				for j, right_chessboard in enumerate(right_chessboards):
+					if left_chessboards[i][0] == right_chessboards[j][0]:
+						new_left_chessboards.append(left_chessboards[i])
+						new_right_chessboards.append(right_chessboards[j])
+
+		return new_left_chessboards, new_right_chessboards
 	return False
 
 def calibrate_stereo(left_chessboards, right_chessboards, left_cam, right_cam, size):
@@ -248,7 +242,7 @@ def calibrate_mono_local(camera_name, img_directory):
 	
 	save_calib(cal, camera_name)
 	print(cal.rms)
-	# print(camera_matrix)
+	print(camera_matrix)
 
 def calibrate_stereo_local():
 	os.chdir(c.STEREO_CALIB_IMG_P)
@@ -321,15 +315,8 @@ def calibrate_stereo_local():
 	print(points3d)
 	return True
 
-
-
 if __name__ == "__main__":
 	# print(generate_pattern_points())
 	# calibrate_mono_local('calib_R.npy','calib_R')
 	# calibrate_mono_local('calib_L.npy','calib_L')
 	calibrate_stereo_local()
-	# left_calib, right_calib = load_calibs()
-	# print(left_calib.rms)
-	# print(right_calib.rms)
-	# stereo_cal = load_stereo_calib()
-	# print(stereo_cal.rms)

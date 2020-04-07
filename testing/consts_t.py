@@ -1,5 +1,3 @@
-DEBUG = False
-
 SERVER = 'server'
 CLIENT = 'client'
 

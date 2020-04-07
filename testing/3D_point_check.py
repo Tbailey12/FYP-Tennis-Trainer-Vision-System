@@ -13,14 +13,14 @@ MAIN_P = ROOT_P + '\\' + 'testing'
 if __name__ == "__main__":
 	os.chdir(MAIN_P)
 	s_cal = s_calib.StereoCal()
-	s_cal.load_params('0.8524stereo_calib.npy')
+	s_cal.load_params('0.3071stereo_calib.npy')
 	os.chdir(IMG_P)
 
-	img_L = cv2.imread('l_0020.png', cv2.IMREAD_GRAYSCALE)
-	img_R = cv2.imread('r_0020.png', cv2.IMREAD_GRAYSCALE)
+	img_L = cv2.imread('l_0016.png', cv2.IMREAD_GRAYSCALE)
+	img_R = cv2.imread('r_0016.png', cv2.IMREAD_GRAYSCALE)
 
-	Lmap1, Lmap2 = cv2.initUndistortRectifyMap(s_cal.cameraMatrix1,s_cal.distCoeffs1,s_cal.R1,s_cal.P1,(640,480),cv2.CV_32FC1)
-	Rmap1, Rmap2 = cv2.initUndistortRectifyMap(s_cal.cameraMatrix2,s_cal.distCoeffs2,s_cal.R2,s_cal.P2,(640,480),cv2.CV_32FC1)	
+	Lmap1, Lmap2 = cv2.initUndistortRectifyMap(s_cal.cameraMatrix1,s_cal.distCoeffs1,s_cal.R1,s_cal.P1,(1000,600),cv2.CV_32FC1)
+	Rmap1, Rmap2 = cv2.initUndistortRectifyMap(s_cal.cameraMatrix2,s_cal.distCoeffs2,s_cal.R2,s_cal.P2,(1000,600),cv2.CV_32FC1)	
 	img_L_r = cv2.remap(img_L, Lmap1, Lmap2, interpolation=cv2.INTER_CUBIC, borderMode=cv2.BORDER_CONSTANT)
 	img_R_r = cv2.remap(img_R, Rmap1, Rmap2, interpolation=cv2.INTER_CUBIC, borderMode=cv2.BORDER_CONSTANT)
 	
