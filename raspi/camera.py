@@ -136,7 +136,7 @@ def ImageProcessor(unprocessed_frames, processed_frames, proc_complete, event_ma
                 B_old = np.copy(B)
                 # B = np.logical_or((y_data > (img_mean + 2*img_std)),
                                   # (y_data < (img_mean - 2*img_std)))  # foreground new
-                np.multiply(img_std,2,out=B_1_std)
+                np.multiply(img_std,3,out=B_1_std)
                 np.add(B_1_std,img_mean,out=B_1_mean)
                 B_greater = np.greater(y_data,B_1_mean)
                 np.subtract(img_mean,B_1_std,out=B_2_mean)

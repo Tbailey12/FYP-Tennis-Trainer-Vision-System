@@ -7,6 +7,8 @@ import select
 import time
 import sys
 from datetime import datetime
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
 
 import cv2
 
@@ -111,92 +113,86 @@ def initialise():
             print('both clients connected')
             return True
 
-def rectify_points(ball_set, camera_matrix, dist_coeffs, R_matrix, P_matrix):
-    for ball in range(len(ball_set)):
-        ball_set[ball][c.X_COORD:c.Y_COORD+1] = cv2.undistortPoints(ball_set[ball][c.X_COORD:c.Y_COORD+1], camera_matrix, dist_coeffs, R=R_matrix, P=P_matrix).flatten()
+def rectify_points(frame, camera_matrix, dist_coeffs, R_matrix, P_matrix):
+    for candidate in frame:
+        if candidate is not []:
+            candidate[c.X_COORD:c.Y_COORD+1] = cv2.undistortPoints(candidate[c.X_COORD:c.Y_COORD+1], camera_matrix, dist_coeffs, R=R_matrix, P=P_matrix)
 
-def triangulate_balls(stereo_calib, left_balls, right_balls):
-    X_W = 0
-    Y_W = 1
-    W_W = 0.5
-    H_W = 0.5
-    SIZE_W = 0.75
+def triangulate_points(stereo_calib, left_candidates, right_candidates):
+    # rotation and translation matrices to account for camera baseline, height and angle
+    Rx = np.array(  [[1,        0,                      0,                      0],
+                    [0,         np.cos(c.CAM_ANGLE),    -np.sin(c.CAM_ANGLE),   0],
+                    [0,         np.sin(c.CAM_ANGLE),    np.cos(c.CAM_ANGLE),    0],
+                    [0,         0,                      0,                      1]], dtype=np.float32)
 
-    candidates_3D = 1000*[None]
-    
-    start = timeit.default_timer()
-    # similarity comparison
-    for k in range(min(len(left_balls),len(right_balls))):
-        print(k)
-        # if there are no ball candidates from either camera, skip frame
-        if (len(left_balls[k]) == 0) or (len(right_balls[k]) == 0):
-            candidates_3D[k] = []
+    Tz = np.array([ [1, 0, 0, -(c.CAM_BASELINE/2)],
+                    [0, 1, 0, 0],
+                    [0, 0, 1, c.CAM_HEIGHT],
+                    [0, 0, 0, 1]], dtype=np.float32)
+
+    Rx = Rx.dot(Tz)
+
+    candidates_3D = len(left_candidates)*[[]]
+
+    for f, frame in enumerate(left_candidates):
+        if left_candidates[f] is None or right_candidates[f] is None:
+            candidates_3D[f] = []
             continue
+        else:
+            candidates = []
+            for i_l, c_l in enumerate(left_candidates[f]):
+                max_sim = 0
+                for j_r, c_r in enumerate(right_candidates[f]):
+                    if abs(c_l[c.Y_COORD]-c_r[c.Y_COORD]) < c.DISP_Y:
 
-        # loop through left and right candidates
-        for i, c_l in enumerate(left_balls[k]):
-            max_sim = 0
-            for j, c_r in enumerate(right_balls[k]):
-                width_r = c_l[c.WIDTH]/c_r[c.WIDTH]
-                size_r = c_l[c.SIZE]/c_r[c.SIZE]
-                height_r = c_l[c.HEIGHT]/c_r[c.HEIGHT]
+                        # calculate ratio between left and right candidate
+                        width_r = c_l[c.WIDTH]/c_r[c.WIDTH]
+                        size_r = c_l[c.SIZE]/c_r[c.SIZE]
+                        height_r = c_l[c.HEIGHT]/c_r[c.HEIGHT]
 
-                if width_r<1: width_r=1/width_r
-                if size_r<1: size_r=1/size_r
-                if height_r<1: height_r=1/height_r
+                        # ensure all ratios are > 1
+                        if width_r<1: width_r=1/width_r
+                        if size_r<1: size_r=1/size_r
+                        if height_r<1: height_r=1/height_r
 
+                        calc_b = ((size_r)**2 + (width_r)**2 + (height_r)**2)
 
-                calc_b = (  SIZE_W*(size_r)**2 +\
-                                W_W*(width_r)**2 +\
-                                H_W*(height_r)**2 +\
-                                X_W*(c_l[c.X_COORD]-c_r[c.X_COORD])**2 +\
-                                Y_W*(c_l[c.Y_COORD]-c_r[c.Y_COORD])**2 )
-                if calc_b != 0:
-                    sim = 1/calc_b
-                else:
-                    sim = np.Inf
+                        if calc_b != 0:
+                            sim = 3/calc_b
+                        else:
+                            sim = np.Inf
                 
-                if sim>max_sim:
-                    r_match = j
-                    max_sim = sim
+                        # find the object in the right image with the highest similarity
+                        if sim>max_sim:
+                            r_match = j_r
+                            max_sim = sim
 
-            # highest similarity between left candidate and right candidates is used
-            # r_match = np.where(sim[i]==np.amax(sim[i]))[0][0]
-            # if r_match in matched:
-            #   break
-            # matched.append(r_match)
+                if max_sim > c.SIM_THRESH:
+                    points4d = cv2.triangulatePoints(stereo_calib.P1, stereo_calib.P2, left_candidates[f][i_l][c.X_COORD:c.Y_COORD+1], right_candidates[f][r_match][c.X_COORD:c.Y_COORD+1]).flatten()
+                    points3d = [i/points4d[3] for i in points4d[:3]]
+                    points3d_shift = [points3d[0], points3d[2], -points3d[1], 1]
+                    points3d_shift = Rx.dot(points3d_shift)
+                    candidates.append(points3d_shift)
 
-            ## -- Triangulate points in 3D space -- ##
-            points4d = cv2.triangulatePoints(stereo_calib.P1,stereo_calib.P2,\
-                                                (left_balls[k][i][c.X_COORD],left_balls[k][i][c.Y_COORD]),\
-                                                (right_balls[k][r_match][c.X_COORD],right_balls[k][r_match][c.Y_COORD]))
-                
-            ## -- Convert homogeneous coordinates to Euclidean space -- ##
-            candidates_3D[k] = np.array([points4d[:3]/points4d[3] for i in points4d[:3]])   
+            candidates_3D[f] = candidates
+    return candidates_3D
 
-    candidates_3D = [x for x in candidates_3D if x is not None]
-    print((timeit.default_timer()-start))
-
-    import matplotlib.pyplot as plt
-    from mpl_toolkits.mplot3d import Axes3D
+def plot_points(points_3d):
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
     ax.set_xlabel('x (m)')
     ax.set_ylabel('y (m)')
     ax.set_zlabel('z (m)')
-    ax.set_xlim(-1, 1)
-    ax.set_ylim(0, 1)
-    ax.set_zlim(0, 3)
+    ax.set_xlim(-11E-1/2, 11E-1/2)
+    ax.set_ylim(0, 24E-1)
+    ax.set_zlim(0, 2E-1)
 
-    # os.chdir("plots")
+    for f, candidates in enumerate(points_3d):
+        for candidate in candidates:
+            ax.scatter(xs=candidate[0],ys=candidate[1],zs=candidate[2])
+        # plt.savefig(f"{f:04d}.png")
 
-    for point in candidates_3D:
-        if len(point) > 0 and point.item(2)>0:
-            ax.scatter(xs=point.item(0)-(25E-2/2),ys=point.item(2),zs=-point.item(1))
-        # plt.savefig(f"{frame:04d}.png")
     plt.show()
-
-    np.save("points_3d.npy", candidates_3D)
 
 def record(stereo_calib = None, record_time = c.REC_T):
     if stereo_calib is None:
@@ -208,68 +204,103 @@ def record(stereo_calib = None, record_time = c.REC_T):
     left_done = False
     right_done = False
 
-    right_frame = 0
-    left_frame = 0
-
-    ##################### TESTING #####################
-    left_balls = 1000*[None]
-    right_balls = 1000*[None]
-    # right_done = True
-    ####################################################
+    right_frames = 0
+    left_frames = 0
 
     rec_obj = sf.MyMessage(c.TYPE_REC, record_time)
     send_to_client(c.LEFT_CLIENT, rec_obj)
     send_to_client(c.RIGHT_CLIENT, rec_obj)
-    ####################################################
-    ####################################################
-    left_frame_tot = 0
-    right_frame_tot = 0
+
+    left_candidates = record_time*100*[None]
+    right_candidates = record_time*100*[None]
 
     while True:
         message_list.extend(read_all_client_messages())
+
         while pos < len(message_list):
             if message_list[pos]['data'].type == c.TYPE_BALLS:
-                # print(message_list[pos]['data'].message[0])
+
                 if message_list[pos]['client'] == c.LEFT_CLIENT:
-                    left_frame = message_list[pos]['data'].message[0]
-                    # left_balls.append(message_list[pos]['data'].message)
-                    left_balls[left_frame] = message_list[pos]['data'].message[1]
-                    rectify_points(left_balls[left_frame], stereo_calib.cameraMatrix1, stereo_calib.distCoeffs1, stereo_calib.R1, stereo_calib.P1)
-                    if left_frame>left_frame_tot:
-                        left_frame_tot = left_frame
+                    f = int(message_list[pos]['data'].message[0])
+                    rectify_points(message_list[pos]['data'].message[1], stereo_calib.cameraMatrix1, stereo_calib.distCoeffs1, stereo_calib.R1, stereo_calib.P1)
+                    left_candidates[f] = message_list[pos]['data'].message[1]
+                    left_frames+=1
 
                 elif message_list[pos]['client'] == c.RIGHT_CLIENT:
-                    right_frame = message_list[pos]['data'].message[0]
-                    # right_balls.append(message_list[pos]['data'].message)
-                    right_balls[right_frame] = message_list[pos]['data'].message[1]
-                    rectify_points(right_balls[right_frame], stereo_calib.cameraMatrix2, stereo_calib.distCoeffs2, stereo_calib.R2, stereo_calib.P2)
-                    if right_frame>right_frame_tot:
-                        right_frame_tot = right_frame
-
-
+                    f = int(message_list[pos]['data'].message[0])
+                    rectify_points(message_list[pos]['data'].message[1], stereo_calib.cameraMatrix2, stereo_calib.distCoeffs2, stereo_calib.R2, stereo_calib.P2)
+                    right_candidates[f] = message_list[pos]['data'].message[1]
+                    right_frames+=1
+                
             elif message_list[pos]['data'].type == c.TYPE_DONE:
                 if message_list[pos]['client'] == c.LEFT_CLIENT:
                     left_done = True
                 elif message_list[pos]['client'] == c.RIGHT_CLIENT:
                     right_done = True
-                if left_done and right_done:
-                    print('recording finished')
-                    print(f"left frames: {left_frame_tot}")
-                    print(f"right frames: {right_frame_tot}")
-
-                    ##################### TESTING #####################
-                    right_balls = [x for x in right_balls if x is not None]
-                    left_balls = [x for x in left_balls if x is not None]
-
-                    triangulate_balls(stereo_calib, left_balls, right_balls)
-                
-                    np.save('left_ball_candidates.npy', left_balls)
-                    np.save('right_ball_candidates.npy', right_balls)
-                    ###################################################
-                    return True
             else:
                 print(f"unknown message format for recording: {message_list[pos]['data'].type}")
             pos+=1
+
+        if left_done and right_done:
+            print('recording finished')
+           # -- Make both lists the same length -- #
+            min_length = min(left_frames, right_frames)
+            left_candidates = left_candidates[:min_length]
+            right_candidates = right_candidates[:min_length]
+
+            print(f"frames captured: {min_length}")
+
+            return left_candidates, right_candidates
+
+        ## -- TESTING -- ##
+        # message_list.extend(read_all_client_messages())
+        # while pos < len(message_list):
+
+        #     if message_list[pos]['data'].type == c.TYPE_BALLS:
+        #         # print(message_list[pos]['data'].message[0])
+        #         if message_list[pos]['client'] == c.LEFT_CLIENT:
+        #             left_frame = message_list[pos]['data'].message[0]
+        #             # left_balls.append(message_list[pos]['data'].message)
+        #             left_balls[left_frame] = message_list[pos]['data'].message[1]
+        #             rectify_points(left_balls[left_frame], stereo_calib.cameraMatrix1, stereo_calib.distCoeffs1, stereo_calib.R1, stereo_calib.P1)
+        #             if left_frame>left_frame_tot:
+        #                 left_frame_tot = left_frame
+
+        #         elif message_list[pos]['client'] == c.RIGHT_CLIENT:
+        #             right_frame = message_list[pos]['data'].message[0]
+        #             # right_balls.append(message_list[pos]['data'].message)
+        #             right_balls[right_frame] = message_list[pos]['data'].message[1]
+        #             rectify_points(right_balls[right_frame], stereo_calib.cameraMatrix2, stereo_calib.distCoeffs2, stereo_calib.R2, stereo_calib.P2)
+        #             if right_frame>right_frame_tot:
+        #                 right_frame_tot = right_frame
+
+
+
+
+        #     elif message_list[pos]['data'].type == c.TYPE_DONE:
+        #         if message_list[pos]['client'] == c.LEFT_CLIENT:
+        #             left_done = True
+        #         elif message_list[pos]['client'] == c.RIGHT_CLIENT:
+        #             right_done = True
+        #         if left_done and right_done:
+        #             print('recording finished')
+        #             print(f"left frames: {left_frame_tot}")
+        #             print(f"right frames: {right_frame_tot}")
+
+        #             ##################### TESTING #####################
+        #             right_balls = [x for x in right_balls if x is not None]
+        #             left_balls = [x for x in left_balls if x is not None]
+
+        #             triangulate_balls(stereo_calib, left_balls, right_balls)
+                
+        #             np.save('left_ball_candidates.npy', left_balls)
+        #             np.save('right_ball_candidates.npy', right_balls)
+        #             ###################################################
+        #             return True
+        #     else:
+        #         print(f"unknown message format for recording: {message_list[pos]['data'].type}")
+        #     pos+=1
+            ## -- TESTING -- ##
 
 def stream(run_time = c.CALIB_T, calibrate = False, display = False, timeout = False):
     message_list = []
@@ -416,8 +447,10 @@ clients = {}  # list of clients
 
 j = 0
 
+
 if __name__ == "__main__":
     print("Server started")
+
     initialise()
     time.sleep(3)
     print('initialised')
@@ -464,9 +497,9 @@ if __name__ == "__main__":
                 try:
                     cmd = int(cmd)
                     if cmd < c.REC_T_MAX:
-                        start = time.time_ns()
-                        record(stereo_calib= stereo_calib, record_time = cmd)
-                        print((time.time_ns()-start)/1E9)
+                        left_candidates, right_candidates = record(stereo_calib = stereo_calib, record_time = cmd)
+                        points_3d = triangulate_points(stereo_calib, left_candidates, right_candidates)
+                        plot_points(points_3d)
                     else:
                         raise ValueError('invalid time entered')
                 except ValueError:

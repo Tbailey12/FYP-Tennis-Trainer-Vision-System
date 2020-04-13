@@ -1,3 +1,8 @@
+import numpy as np
+
+def deg_2_rad(angle_deg):
+	return angle_deg*np.pi/180
+
 DEBUG = False
 
 SERVER = 'server'
@@ -22,20 +27,24 @@ STREAM_MAX = 60 			# maximum time for a stream
 ## -- Camera consts -- ##
 FRAMERATE = 90
 RESOLUTION = (640,480)
-# RESOLUTION = (1280, 720)
 ISO = 400
+CAM_BASELINE = 25E-2
+CAM_HEIGHT = 35E-2
+CAM_ANGLE = deg_2_rad(-10)
 
 ## -- Processing consts -- ##
 N_PROCESSORS = 4
 LEARNING_RATE = 0.15
 BACKGROUND_RATE = 30
-N_OBJECTS = 100
+N_OBJECTS = 50
 WIDTH = 0
 HEIGHT = 1
 SIZE = 2
 X_COORD = 3
 Y_COORD = 4
-LPF_THRESH = 170
+LPF_THRESH = 150
+DISP_Y = 30
+SIM_THRESH = 0.1
 
 ## -- LED consts -- ##
 LED_F_MAX = 60				# max LED frequency
