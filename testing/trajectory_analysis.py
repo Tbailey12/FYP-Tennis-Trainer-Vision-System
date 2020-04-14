@@ -15,6 +15,8 @@ WIN_SIZE = 20
 WIN_OVERLAP = 3
 MAX_EST = 3
 dT = 1/FPS	# inter frame time
+C_INIT = 0
+CAND = 1
 
 def kph_2_mps(kph):
 	return kph*10/36
@@ -28,7 +30,6 @@ class TrackletBox(object):
 		self.tracklets = []
 
 	def add_tracklet(self, tracklet):
-		print(f"adding tracklet: {tracklet.start_frame}")
 		self.tracklets.append(tracklet)
 
 class Tracklet(object):
@@ -106,7 +107,6 @@ def score_node(est, candidate):
 		return 0
 
 def evaluate(candidates_3D, tracklet, f, f_max):
-	print(f"evaluate f is: {f}")
 	done = False
 	# want to stop recursion when
 	# - 3 consecutive estimates are made
@@ -118,7 +118,9 @@ def evaluate(candidates_3D, tracklet, f, f_max):
 		# yes: compare the tokens and continue
 		# no: add the estimate as a token and continue
 		if candidates_3D[f] != []:
-			for c4 in candidates_3D[f]:
+			for i, cand in enumerate(candidates_3D[f]):
+				c4 = cand[CAND]
+				candidates_3D[f][i][C_INIT] = True
 				score = score_node(est, c4)
 				tracklet.add_token(Token(f, c4, score))
 				evaluate(candidates_3D, tracklet, f+1, f_max)
@@ -129,14 +131,10 @@ def evaluate(candidates_3D, tracklet, f, f_max):
 				tracklet.del_token()
 			else:
 				# added 3 estimates, stop recursion and save tracklet[-3]
-				print(f'too many estimates, length: , score: {tracklet.score}')
 				tracklet.save_tracklet()
-				for token in tracklet.tokens:
-					print(token.f)
 	else:
 		# tracklet is max length
 		# save tracklet and stop recursion
-		print(f'max length reached: {tracklet.length}, score: {tracklet.score}')
 		tracklet.save_tracklet()
 
 if __name__ == "__main__":
@@ -146,6 +144,10 @@ if __name__ == "__main__":
 	os.chdir(ROOT_P + '\\' + 'img\\inside_tests')
 
 	candidates_3D = np.load('candidates_3D.npy', allow_pickle=True)
+
+	for f, frame in enumerate(candidates_3D):
+		for c, candidate in enumerate(frame):
+			candidates_3D[f][c] = [False, candidate]
 
 	# for i in range(105,len(candidates_3D)):
 	# 	candidates_3D[i] = []
@@ -176,15 +178,16 @@ if __name__ == "__main__":
 					init_set = True
 
 			tracklet = Tracklet(f, tracklet_box)
-			print(f"the main f is {f}")
 			for c1_c in c1:
-				tracklet.add_token(Token(f-3,c1_c))
+				if c1_c[C_INIT] is True:	continue
+				tracklet.add_token(Token(f-3,c1_c[CAND]))
 				for c2_c in c2:
-					tracklet.add_token(Token(f-2,c2_c))
+					if c2_c[C_INIT] is True:	continue
+					tracklet.add_token(Token(f-2,c2_c[CAND]))
 					for c3_c in c3:
-						tracklet.add_token(Token(f-1,c3_c))
+						if c3_c[C_INIT] is True:	continue
+						tracklet.add_token(Token(f-1,c3_c[CAND]))
 						evaluate(candidates_3D, tracklet, f, f_max=(window+WIN_SIZE))				
-						print(tracklet.length)
 
 						tracklet.del_token()
 					tracklet.del_token()
@@ -195,7 +198,7 @@ if __name__ == "__main__":
 
 	print(f"Tracklet number: {len(tracklet_box.tracklets)}")
 	for t in tracklet_box.tracklets:
-		print(t.start_frame)
+		print(f"f: {t.start_frame}, score:{t.score}")
 	
 
 
