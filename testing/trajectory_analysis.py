@@ -31,7 +31,6 @@ class Tracklet(object):
 		self.con_est = 0
 
 	def add_token(self, token):
-		self.con_est = 0
 		self.tokens.append(token)
 		self.score += token.score
 		self.length += 1
@@ -52,15 +51,12 @@ class Tracklet(object):
 			return None
 
 	def add_est(self, token):
-		con_est_temp = 0
 		if self.con_est < MAX_EST:
-			con_est_temp += self.con_est+1
 			self.add_token(token)
-			self.con_est = con_est_temp
-		
+			self.con_est += 1
 			return True
 		else:
-			print('too many')
+			self.con_est = 0
 			return False
 
 class Token(object):
@@ -98,22 +94,38 @@ def score_node(est, candidate):
 
 def evaluate(candidates_3D, tracklet, f, f_max):
 	done = False
+	# want to stop recursion when
+	# - 3 consecutive estimates are made
+	# - f == max
 	if f < f_max:
 		est = tracklet.est_next()
-		if candidates_3D[f] == []:
-			print('estimate')
-			if not tracklet.add_est(Token(f, est)):
-				done = True
-		else:
+
+		# are there tokens to compare?
+		# yes: compare the tokens and continue
+		# no: add the estimate as a token and continue
+		if candidates_3D[f] != []:
 			for c4 in candidates_3D[f]:
 				score = score_node(est, c4)
 				tracklet.add_token(Token(f, c4, score))
-				if evaluate(candidates_3D, tracklet, f+1, f_max):
-					done = True
-	if done:
-		print('hi', f)
+				evaluate(candidates_3D, tracklet, f+1, f_max)
+				tracklet.del_token()
+		else:
+			if tracklet.add_est(Token(f, est)):
+				print('estimate')
+				evaluate(candidates_3D, tracklet, f+1, f_max)
+				tracklet.del_token()
+			else:
+				# added 3 estimates, stop recursion and save tracklet[-3]
+				print(f'too many estimates, length: , score: {tracklet.score}')
+				for token in tracklet.tokens:
+					print(token.f)
 	else:
-		return True
+		# tracklet is max length
+		# save tracklet and stop recursion
+		print(f'max length reached: {tracklet.length}, score: {tracklet.score}')
+		for token in tracklet.tokens:
+			print(token.f)
+
 
 if __name__ == "__main__":
 	RESOLUTION = (640,480)
@@ -123,8 +135,8 @@ if __name__ == "__main__":
 
 	candidates_3D = np.load('candidates_3D.npy', allow_pickle=True)
 
-	for i in range(108,len(candidates_3D)):
-		candidates_3D[i] = []
+	# for i in range(105,len(candidates_3D)):
+	# 	candidates_3D[i] = []
 
 	## -- Shift Token Transfer -- ##
 	frame_num = len(candidates_3D)
@@ -160,7 +172,13 @@ if __name__ == "__main__":
 
 						evaluate(candidates_3D, tracklet, f, f_max=(window+WIN_SIZE))				
 						print(tracklet.length)
-	print(frame_num)
+
+						tracklet.del_token()
+					tracklet.del_token()
+				tracklet.del_token()
+			break
+
+	# print(frame_num)
 
 
 
