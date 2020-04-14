@@ -1,6 +1,7 @@
 import numpy as np
 import os
 import time
+import copy
 
 ROOT_P = 'D:\\documents\\local uni\\FYP\\code'
 
@@ -22,13 +23,25 @@ dM = kph_2_mps(VM)*dT 	# max dist
 thetaM = np.pi
 phiM = np.pi
 
+class TrackletBox(object):
+	def __init__(self):
+		self.tracklets = []
+
+	def add_tracklet(self, tracklet):
+		print('adding tracklet')
+		self.tracklets.append(tracklet)
+
 class Tracklet(object):
-	def __init__(self, start_frame):
+	def __init__(self, start_frame, tracklet_box):
 		self.start_frame = start_frame
+		self.tracklet_box = tracklet_box
 		self.tokens = []
 		self.score = 0
 		self.length = 0
 		self.con_est = 0
+
+	def save_tracklet(self):
+		self.tracklet_box.add_tracklet(copy.deepcopy(self))
 
 	def add_token(self, token):
 		self.tokens.append(token)
@@ -117,15 +130,16 @@ def evaluate(candidates_3D, tracklet, f, f_max):
 			else:
 				# added 3 estimates, stop recursion and save tracklet[-3]
 				print(f'too many estimates, length: , score: {tracklet.score}')
+				tracklet.save_tracklet()
 				for token in tracklet.tokens:
 					print(token.f)
 	else:
 		# tracklet is max length
 		# save tracklet and stop recursion
 		print(f'max length reached: {tracklet.length}, score: {tracklet.score}')
+		tracklet.save_tracklet()
 		for token in tracklet.tokens:
 			print(token.f)
-
 
 if __name__ == "__main__":
 	RESOLUTION = (640,480)
@@ -144,6 +158,7 @@ if __name__ == "__main__":
 
 	windows = num_windows*[None]
 
+	tracklet_box = TrackletBox()
 	for window in range(0,num_windows*WIN_SIZE,(WIN_SIZE-WIN_OVERLAP)):
 		init_set = False
 		c1,c2,c3,c4 = [],[],[],[]
@@ -162,7 +177,8 @@ if __name__ == "__main__":
 				else:
 					init_set = True
 
-			tracklet = Tracklet(f)
+			tracklet = Tracklet(f, tracklet_box)
+
 			for c1_c in c1:
 				tracklet.add_token(Token(f-3,c1_c))
 				for c2_c in c2:
@@ -178,7 +194,10 @@ if __name__ == "__main__":
 				tracklet.del_token()
 			break
 
-	# print(frame_num)
+	print(f"Tracklet number: {len(tracklet_box.tracklets)}")
+	for t in tracklet_box.tracklets:
+		print(t.score)
+	
 
 
 
@@ -198,25 +217,7 @@ if __name__ == "__main__":
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+	
 
 
 	# ## -- Plot points -- ##
