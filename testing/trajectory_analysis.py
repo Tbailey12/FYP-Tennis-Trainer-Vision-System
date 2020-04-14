@@ -28,7 +28,7 @@ class TrackletBox(object):
 		self.tracklets = []
 
 	def add_tracklet(self, tracklet):
-		print('adding tracklet')
+		print(f"adding tracklet: {tracklet.start_frame}")
 		self.tracklets.append(tracklet)
 
 class Tracklet(object):
@@ -41,7 +41,7 @@ class Tracklet(object):
 		self.con_est = 0
 
 	def save_tracklet(self):
-		self.tracklet_box.add_tracklet(copy.deepcopy(self))
+		self.tracklet_box.add_tracklet(copy.copy(self))
 
 	def add_token(self, token):
 		self.tokens.append(token)
@@ -106,6 +106,7 @@ def score_node(est, candidate):
 		return 0
 
 def evaluate(candidates_3D, tracklet, f, f_max):
+	print(f"evaluate f is: {f}")
 	done = False
 	# want to stop recursion when
 	# - 3 consecutive estimates are made
@@ -124,7 +125,6 @@ def evaluate(candidates_3D, tracklet, f, f_max):
 				tracklet.del_token()
 		else:
 			if tracklet.add_est(Token(f, est)):
-				print('estimate')
 				evaluate(candidates_3D, tracklet, f+1, f_max)
 				tracklet.del_token()
 			else:
@@ -138,8 +138,6 @@ def evaluate(candidates_3D, tracklet, f, f_max):
 		# save tracklet and stop recursion
 		print(f'max length reached: {tracklet.length}, score: {tracklet.score}')
 		tracklet.save_tracklet()
-		for token in tracklet.tokens:
-			print(token.f)
 
 if __name__ == "__main__":
 	RESOLUTION = (640,480)
@@ -178,25 +176,26 @@ if __name__ == "__main__":
 					init_set = True
 
 			tracklet = Tracklet(f, tracklet_box)
-
+			print(f"the main f is {f}")
 			for c1_c in c1:
 				tracklet.add_token(Token(f-3,c1_c))
 				for c2_c in c2:
 					tracklet.add_token(Token(f-2,c2_c))
 					for c3_c in c3:
 						tracklet.add_token(Token(f-1,c3_c))
-
 						evaluate(candidates_3D, tracklet, f, f_max=(window+WIN_SIZE))				
 						print(tracklet.length)
 
 						tracklet.del_token()
 					tracklet.del_token()
 				tracklet.del_token()
-			break
+
+			init_set = False
+			c1,c2,c3,c4 = [],[],[],[]
 
 	print(f"Tracklet number: {len(tracklet_box.tracklets)}")
 	for t in tracklet_box.tracklets:
-		print(t.score)
+		print(t.start_frame)
 	
 
 
@@ -217,7 +216,7 @@ if __name__ == "__main__":
 
 
 
-	
+
 
 
 	# ## -- Plot points -- ##
