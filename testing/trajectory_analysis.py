@@ -11,23 +11,25 @@ Z = 2
 FPS = 90
 VM = 150	# max ball velocity
 Vm = 30		# min ball velocity
-WIN_SIZE = 20
-WIN_OVERLAP = 3
+WIN_SIZE = 30
+WIN_OVERLAP = 10
 MAX_EST = 3
 dT = 1/FPS	# inter frame time
 C_INIT = 0
 CAND = 1
-TRACKLET_SCORE_THRESH = 1
-TOKEN_SIM_THRESH = 0
-TOKEN_SCORE_THRESH = 0
-SCORE_TOK_THRESH = 0
+EXTRAPOLATE_N = 3
 
 def kph_2_mps(kph):
 	return kph*10/36
 
-dM = kph_2_mps(VM)*dT*2 	# max dist
+dM = kph_2_mps(VM)*dT 	# max dist
 thetaM = np.pi
 phiM = np.pi
+
+TRACKLET_SCORE_THRESH = 1
+TOKEN_SIM_THRESH = dM
+TOKEN_SCORE_THRESH = 1
+SCORE_TOK_THRESH = 1
 
 class TrackletBox(object):
 	def __init__(self):
@@ -43,6 +45,7 @@ class TrackletBox(object):
 				tracklet.is_valid = False
 
 	def merge_tracklets(self):
+		## -- Same start frame -- ##
 		for t1 in self.tracklets:
 			hiscore = t1.score
 			for t2 in self.tracklets:
@@ -56,7 +59,11 @@ class TrackletBox(object):
 						else:
 							t2.is_valid = False
 
+		# -- Temporal overlap -- ##
 		for t1 in self.tracklets:
+			if not t1.is_valid:
+				continue
+
 			for t2 in self.tracklets:
 				if t1 is not t2 and t1.is_valid and t2.is_valid:
 					# check for temporal overlap
@@ -86,7 +93,7 @@ class TrackletBox(object):
 							for token1 in reversed(first.tokens):
 								cons = False
 								cons_count = 0
-								# track = Tracklet(first.tokens.index(token1))
+
 								for token2 in second.tokens:
 									sim = token1.calc_similarity(token2)
 
@@ -103,26 +110,119 @@ class TrackletBox(object):
 							if shared_tracklets != []:
 								shared_track = sorted(shared_tracklets, key=lambda x: x[2], reverse=True)[0]
 								
+								print(shared_track)
+
 								first.tokens = first.tokens[0:shared_track[0]+1]
 								for tok in second.tokens[shared_track[1]:]:
 									first.add_token(tok)
 
 								second.is_valid = False
 
-							# if num_shared > 0:
-							# 	first.tokens
-							# if spatial overlap
-								# merge tracklets
-							# if not spatial overlap
-								# don't merge tracklets
-					# if not temporal overlap
-						# check spatial distance
-							# if distance is < D
-								# extrapolate ends of both tracklets
-								# if they intersect
-									# extend tracklets to intersection point
-								# else don't extend them
+		for t1 in self.tracklets:
+			if not t1.is_valid:
+				continue
+			for t2 in self.tracklets:
+				if not t2.is_valid:
+					continue
+				first = None
+				second = None
+				if t1.start_frame+t1.length < t2.start_frame:
+					first = t1
+					second = t2
+				elif t2.start_frame+t2.length < t1.start_frame:
+					first = t2
+					second = t1
 
+
+				if first is not None and second is not None:
+					for token in first.tokens[-3:]:
+						print(token.coords)
+					if first.length > 3 and second.length > 3:
+						first_extrapolation_points = []
+						second_extrapolation_points = []
+
+						for i in range(3):
+							first_extrapolation_points.append(first.tokens[i-3].coords)
+							second_extrapolation_points.append(second.tokens[2-i].coords)
+
+						for i in range(EXTRAPOLATE_N):
+							first_extrapolation_points.append(
+								make_est(	first_extrapolation_points[-3],
+											first_extrapolation_points[-2],
+											first_extrapolation_points[-1]))
+							
+							second_extrapolation_points.append(
+								make_est(	second_extrapolation_points[-3],
+											second_extrapolation_points[-2],
+											second_extrapolation_points[-1]))
+
+						first_extrapolation_points = first_extrapolation_points[-EXTRAPOLATE_N:]
+						second_extrapolation_points = second_extrapolation_points[-EXTRAPOLATE_N:]
+
+						best_match = TOKEN_SIM_THRESH
+						best_f_p = None
+						best_s_p = None
+						for i, f_p in enumerate(first_extrapolation_points):
+							for j, s_p in enumerate(second_extrapolation_points):
+								sim = calc_dist(f_p-s_p)
+								if sim < TOKEN_SIM_THRESH:
+									best_match = sim
+									best_f_p = i
+									best_s_p = j
+									break
+							if best_f_p is not None:
+								break
+
+						if best_f_p is not None and best_s_p is not None:
+							new_first_points = first_extrapolation_points[:i]
+							new_second_points = second_extrapolation_points[:j]
+
+							# print(new_first_points)
+							# print(new_second_points)
+
+							## -- Plot points -- ##
+							# import matplotlib.pyplot as plt
+							# from mpl_toolkits.mplot3d import Axes3D
+							# fig = plt.figure()
+							# ax = fig.add_subplot(111, projection='3d')
+							# ax.set_xlabel('x (m)')
+							# ax.set_ylabel('y (m)')
+							# ax.set_zlabel('z (m)')
+							# ax.set_xlim(-11/2, 11/2)
+							# ax.set_ylim(0, 24)
+							# ax.set_zlim(-2, 2)
+
+							for first_point in new_first_points:
+								first.add_token(Token(first.tokens[-1].f+1,first_point,score=1))
+								# ax.scatter(xs=first_point[X], ys=first_point[Y], zs=first_point[Z], marker='X')
+
+							for second_point in reversed(new_second_points):
+								first.add_token(Token(first.tokens[-1].f+1,second_point,score=1))
+								# ax.scatter(xs=second_point[X], ys=second_point[Y], zs=second_point[Z], marker='X')
+
+							for tok in second.tokens:
+								first.add_token(tok)
+
+							second.is_valid = False
+
+							# count = 0
+							# for tok in first.tokens:
+							# 	count+=1
+							# 	ax.scatter(xs=tok.coords[X], ys=tok.coords[Y], zs=tok.coords[Z])
+							
+							# print(count)
+							# print(first.length)
+
+
+							# plt.show()
+
+
+def make_est(c1,c2,c3):
+	a3 = ((c3-c2)-(c2-c1))/(dT**2)			# acceleration
+	v3 = ((c3-c2)/(dT)) + a3*dT 			# velocity
+
+	c4_e = c3+v3*dT+((a3*dT**2)/(2)) 		# next point estimation
+	return c4_e
 
 class Tracklet(object):
 	def __init__(self, start_frame, tracklet_box=None, tokens=[], score=0,length=0):
@@ -149,6 +249,12 @@ class Tracklet(object):
 		self.score += token.score
 		self.length += 1
 
+	def insert_token(self, token, index):
+		if index < len(self.tokens):
+			self.tokens.insert(index, token)
+			self.length+=1
+			self.score+=token.score
+
 	def del_token(self):
 		self.score -= self.tokens[-1].score
 		self.length -= 1
@@ -156,11 +262,7 @@ class Tracklet(object):
 
 	def est_next(self):
 		if self.length >= 3:
-			a3 = ((self.tokens[-1].coords-self.tokens[-2].coords)-(self.tokens[-2].coords-self.tokens[-3].coords))/(dT**2)			# acceleration
-			v3 = ((self.tokens[-1].coords-self.tokens[-2].coords)/(dT)) + a3*dT 			# velocity
-
-			c4_e = self.tokens[-1].coords+v3*dT+((a3*dT**2)/(2)) 		# next point estimation
-			return c4_e
+			return make_est(self.tokens[-3].coords,self.tokens[-2].coords,self.tokens[-1].coords)
 		else:
 			return None
 
@@ -182,14 +284,11 @@ class Token(object):
 
 	def calc_similarity(self, token):
 		error = self.coords-token.coords
-		e_sum = 0
-		for c in error:
-			e_sum+=c**2
-		return np.sqrt(e_sum)
+		return calc_dist(error)
 
 def calc_dist(vect):
 	a = 0
-	for el in vect[:2]:
+	for el in vect[:3]:
 		a += el**2
 
 	return np.sqrt(a)
@@ -316,7 +415,7 @@ if __name__ == "__main__":
 	tracklet_box.merge_tracklets()
 	tracklet_box.validate_tracklets()
 
-	## -- Plot points -- ##
+	# -- Plot points -- ##
 	import matplotlib.pyplot as plt
 	from mpl_toolkits.mplot3d import Axes3D
 	fig = plt.figure()
@@ -328,77 +427,18 @@ if __name__ == "__main__":
 	ax.set_ylim(0, 24)
 	ax.set_zlim(-2, 2)
 
-	# count = 0
-	# for f, candidates in enumerate(candidates_3D):
-	# 	for candidate in candidates:
-	# 		ax.scatter(xs=candidate[0],ys=candidate[1],zs=candidate[2])
-	# 		count+=1
-	# 	# plt.savefig(f"{f:04d}.png")
-
-
-	# print(count)
-	# plt.show()
-	# quit()
-
-
 	count = 0
 	for tracklet in tracklet_box.tracklets:
 		if tracklet.is_valid:
+			count+=1
 			for tok in tracklet.tokens:
 				ax.scatter(xs=tok.coords[X], ys=tok.coords[Y], zs=tok.coords[Z])
 	plt.show()
 
-	print(f"Tracklet number: {len(tracklet_box.tracklets)}")
-	count = 0
+	print(f"Tracklet number: {count}")
 	for t in tracklet_box.tracklets:
 		if t.is_valid:
-			count += 1
+			print(t.tokens[0].coords)
+			print(t.tokens[-1].coords)
 			print(f"f_start: {t.start_frame}, f_end: {t.start_frame+t.length}, score: {t.score:0.2f}, score/tok: {t.score/t.length:0.2f}")
-	
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-	# ## -- Plot points -- ##
-	# import matplotlib.pyplot as plt
-	# from mpl_toolkits.mplot3d import Axes3D
-	# fig = plt.figure()
-	# ax = fig.add_subplot(111, projection='3d')
-	# ax.set_xlabel('x (m)')
-	# ax.set_ylabel('y (m)')
-	# ax.set_zlabel('z (m)')
-	# ax.set_xlim(-11E-1/2, 11E-1/2)
-	# ax.set_ylim(0, 24E-1)
-	# ax.set_zlim(0, 2E-1)
-
-	# os.chdir("plots")
-
-	# count = 0
-	# for f, candidates in enumerate(candidates_3D):
-	# 	for candidate in candidates:
-	# 		ax.scatter(xs=candidate[0],ys=candidate[1],zs=candidate[2])
-	# 		count+=1
-	# 	# plt.savefig(f"{f:04d}.png")
-
-
-	# print(count)
-	# plt.show()
-	# quit()
+			print("\n")
