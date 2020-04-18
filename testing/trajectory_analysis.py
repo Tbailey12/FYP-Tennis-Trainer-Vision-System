@@ -433,7 +433,7 @@ if __name__ == "__main__":
 			count+=1
 			for tok in tracklet.tokens:
 				ax.scatter(xs=tok.coords[X], ys=tok.coords[Y], zs=tok.coords[Z])
-	plt.show()
+	# plt.show()
 
 	print(f"Tracklet number: {count}")
 	for t in tracklet_box.tracklets:
@@ -442,3 +442,51 @@ if __name__ == "__main__":
 			print(t.tokens[-1].coords)
 			print(f"f_start: {t.start_frame}, f_end: {t.start_frame+t.length}, score: {t.score:0.2f}, score/tok: {t.score/t.length:0.2f}")
 			print("\n")
+
+
+		## -- Plot points -- ##
+	import matplotlib.pyplot as plt
+	from mpl_toolkits.mplot3d import Axes3D
+	fig = plt.figure()
+	ax = fig.add_subplot(111, projection='3d')
+	ax.set_xlabel('x (m)')
+	ax.set_ylabel('y (m)')
+	ax.set_zlabel('z (m)')
+	ax.set_xlim(-11/2, 11/2)
+	ax.set_ylim(0, 24)
+	ax.set_zlim(-2, 2)
+
+	from scipy.optimize import curve_fit
+
+	x_points = []
+	y_points = []
+	z_points = []
+
+	for tok in tracklet_box.tracklets[0].tokens:
+		x_points.append(tok.coords[X])
+		y_points.append(tok.coords[Y])
+		z_points.append(tok.coords[Z])
+
+		ax.scatter(xs=tok.coords[X],ys=tok.coords[Y],zs=tok.coords[Z],cmap='Greens')
+
+	def func(t,a,b,c,d):
+	    return a+b*t+c*t**2+d*t**3
+
+	t = np.linspace(tracklet_box.tracklets[0].start_frame*1/90, \
+					(tracklet_box.tracklets[0].start_frame+tracklet_box.tracklets[0].length)*1/90, \
+					tracklet_box.tracklets[0].length)
+
+	x_params, covmatrix = curve_fit(func, t, x_points)
+	y_params, covmatrix = curve_fit(func, t, y_points)
+	z_params, covmatrix = curve_fit(func, t, z_points)
+
+	t = np.linspace(0,2,90*2)
+
+	x_est = func(t,*x_params)
+	y_est = func(t,*y_params)
+	z_est = func(t,*z_params)
+
+	z_est[z_est<0] = None
+
+	ax.plot3D(x_est,y_est,z_est)
+	plt.show()
