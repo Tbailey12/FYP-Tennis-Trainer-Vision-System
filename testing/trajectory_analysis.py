@@ -19,6 +19,7 @@ C_INIT = 0
 CAND = 1
 EXTRAPOLATE_N = 3
 
+
 def kph_2_mps(kph):
 	return kph*10/36
 
@@ -262,7 +263,8 @@ class Tracklet(object):
 
 	def est_next(self):
 		if self.length >= 3:
-			return make_est(self.tokens[-3].coords,self.tokens[-2].coords,self.tokens[-1].coords)
+			est = make_est(self.tokens[-3].coords,self.tokens[-2].coords,self.tokens[-1].coords)
+			return est
 		else:
 			return None
 
@@ -416,26 +418,27 @@ if __name__ == "__main__":
 	tracklet_box.validate_tracklets()
 
 	# -- Plot points -- ##
-	import matplotlib.pyplot as plt
-	from mpl_toolkits.mplot3d import Axes3D
-	fig = plt.figure()
-	ax = fig.add_subplot(111, projection='3d')
-	ax.set_xlabel('x (m)')
-	ax.set_ylabel('y (m)')
-	ax.set_zlabel('z (m)')
-	ax.set_xlim(-11/2, 11/2)
-	ax.set_ylim(0, 24)
-	ax.set_zlim(-2, 2)
+	# import matplotlib.pyplot as plt
+	# from mpl_toolkits.mplot3d import Axes3D
+	# fig = plt.figure()
+	# ax = fig.add_subplot(111, projection='3d')
+	# ax.set_xlabel('x (m)')
+	# ax.set_ylabel('y (m)')
+	# ax.set_zlabel('z (m)')
+	# ax.set_xlim(-11E-1/2, 11E-1/2)
+	# ax.set_ylim(0, 24E-1)
+	# ax.set_zlim(0, 2E-1)
 
-	count = 0
-	for tracklet in tracklet_box.tracklets:
-		if tracklet.is_valid:
-			count+=1
-			for tok in tracklet.tokens:
-				ax.scatter(xs=tok.coords[X], ys=tok.coords[Y], zs=tok.coords[Z])
+	# count = 0
+	# for tracklet in tracklet_box.tracklets:
+	# 	if tracklet.is_valid:
+	# 		count+=1
+	# 		for tok in tracklet.tokens:
+	# 			ax.scatter(xs=tok.coords[X], ys=tok.coords[Y], zs=tok.coords[Z])
 	# plt.show()
 
-	print(f"Tracklet number: {count}")
+	# print(f"Tracklet number: {count}")
+	best_score, best_tracklet = 0, None
 	for t in tracklet_box.tracklets:
 		if t.is_valid:
 			print(t.tokens[0].coords)
@@ -443,8 +446,12 @@ if __name__ == "__main__":
 			print(f"f_start: {t.start_frame}, f_end: {t.start_frame+t.length}, score: {t.score:0.2f}, score/tok: {t.score/t.length:0.2f}")
 			print("\n")
 
+			if t.score>best_score:
+				best_score = t.score
+				best_tracklet = t
 
-		## -- Plot points -- ##
+
+	## -- Plot points -- ##
 	import matplotlib.pyplot as plt
 	from mpl_toolkits.mplot3d import Axes3D
 	fig = plt.figure()
@@ -454,7 +461,7 @@ if __name__ == "__main__":
 	ax.set_zlabel('z (m)')
 	ax.set_xlim(-11/2, 11/2)
 	ax.set_ylim(0, 24)
-	ax.set_zlim(-2, 2)
+	ax.set_zlim(0, 2)
 
 	from scipy.optimize import curve_fit
 
@@ -462,19 +469,23 @@ if __name__ == "__main__":
 	y_points = []
 	z_points = []
 
-	for tok in tracklet_box.tracklets[0].tokens:
+	if best_tracklet is None:
+		quit()
+
+	for tok in best_tracklet.tokens:
+		print(f"f: {tok.f}, score: {tok.score}")
 		x_points.append(tok.coords[X])
 		y_points.append(tok.coords[Y])
 		z_points.append(tok.coords[Z])
 
-		ax.scatter(xs=tok.coords[X],ys=tok.coords[Y],zs=tok.coords[Z],cmap='Greens')
+	ax.scatter(xs=x_points,ys=y_points,zs=z_points,c=np.arange(len(x_points)), cmap='winter')
 
 	def func(t,a,b,c,d):
 	    return a+b*t+c*t**2+d*t**3
 
-	t = np.linspace(tracklet_box.tracklets[0].start_frame*1/90, \
-					(tracklet_box.tracklets[0].start_frame+tracklet_box.tracklets[0].length)*1/90, \
-					tracklet_box.tracklets[0].length)
+	t = np.linspace(best_tracklet.start_frame*1/90, \
+					(best_tracklet.start_frame+best_tracklet.length)*1/90, \
+					best_tracklet.length)
 
 	x_params, covmatrix = curve_fit(func, t, x_points)
 	y_params, covmatrix = curve_fit(func, t, y_points)
