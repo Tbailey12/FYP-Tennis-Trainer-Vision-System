@@ -12,7 +12,7 @@ FPS = 90
 VM = 150	# max ball velocity
 Vm = 30		# min ball velocity
 WIN_SIZE = 30
-WIN_OVERLAP = 10
+WIN_OVERLAP = 5
 MAX_EST = 3
 dT = 1/FPS	# inter frame time
 C_INIT = 0
@@ -44,6 +44,44 @@ class TrackletBox(object):
 			score_tok = tracklet.score/tracklet.length
 			if score_tok < SCORE_TOK_THRESH:
 				tracklet.is_valid = False
+
+	def split_tracklets(self):
+		new_tracklets = []
+		for t in self.tracklets:
+			acc = []
+			vel = []
+			if t.is_valid:
+				for i, tok in enumerate(t.tokens):
+					if i==0:
+						vel.append(0*tok.coords)
+					else:
+						vel.append(t.tokens[i].coords-t.tokens[i-1].coords)
+
+				for j, v in enumerate(vel):
+					if j<3:
+						acc.append(0)
+					else:
+						if vel[j][Z] > 0 and vel[j-1][Z] < 0 and vel[j-2][Z] < 0 and vel[j-3][Z] < 0:
+							acc.append(1)
+						else: 
+							acc.append(-1)
+
+				split_start_f = 0
+				for k, a in enumerate(acc):
+					if k<2 or k>=len(acc)-1:
+						pass
+					else:
+						if acc[k] > 0 and acc[k-1] <= 0 and acc[k+1] <=0 :
+							new_track = Tracklet(split_start_f, \
+							tokens = t.tokens[split_start_f:k], \
+							score = self.tok_score_sum(t.tokens[split_start_f:k]), \
+							length = len(t.tokens[split_start_f:k]))
+
+							t.is_valid = False
+							self.tracklets.append(new_track)
+							split_start_f = k
+
+
 
 	def merge_tracklets(self):
 		## -- Same start frame -- ##
@@ -80,6 +118,10 @@ class TrackletBox(object):
 						second = t1
 
 					if first is not None and second is not None:
+						print(first.length)
+						print(len(first.tokens))
+						print(second.length)
+						print(len(second.tokens))
 						# if temporal overlap
 						contained = None
 						if second.start_frame+second.length < first.start_frame+first.length:
@@ -108,17 +150,20 @@ class TrackletBox(object):
 											shared_tracklets.append([first_index, second_index, cons_count])
 											break
 							# find the track with the most shared tokens
+							print(shared_tracklets)
 							if shared_tracklets != []:
 								shared_track = sorted(shared_tracklets, key=lambda x: x[2], reverse=True)[0]
-								
-								print(shared_track)
-
 								first.tokens = first.tokens[0:shared_track[0]+1]
+								first.length = len(first.tokens)
+								print(shared_track)
 								for tok in second.tokens[shared_track[1]:]:
 									first.add_token(tok)
 
 								second.is_valid = False
+								# print(first.length)
+								# print(len(first.tokens))
 
+		# tracklets intersect after extrapolation
 		for t1 in self.tracklets:
 			if not t1.is_valid:
 				continue
@@ -136,8 +181,6 @@ class TrackletBox(object):
 
 
 				if first is not None and second is not None:
-					for token in first.tokens[-3:]:
-						print(token.coords)
 					if first.length > 3 and second.length > 3:
 						first_extrapolation_points = []
 						second_extrapolation_points = []
@@ -178,45 +221,23 @@ class TrackletBox(object):
 							new_first_points = first_extrapolation_points[:i]
 							new_second_points = second_extrapolation_points[:j]
 
-							# print(new_first_points)
-							# print(new_second_points)
-
-							## -- Plot points -- ##
-							# import matplotlib.pyplot as plt
-							# from mpl_toolkits.mplot3d import Axes3D
-							# fig = plt.figure()
-							# ax = fig.add_subplot(111, projection='3d')
-							# ax.set_xlabel('x (m)')
-							# ax.set_ylabel('y (m)')
-							# ax.set_zlabel('z (m)')
-							# ax.set_xlim(-11/2, 11/2)
-							# ax.set_ylim(0, 24)
-							# ax.set_zlim(-2, 2)
-
 							for first_point in new_first_points:
 								first.add_token(Token(first.tokens[-1].f+1,first_point,score=1))
-								# ax.scatter(xs=first_point[X], ys=first_point[Y], zs=first_point[Z], marker='X')
 
 							for second_point in reversed(new_second_points):
 								first.add_token(Token(first.tokens[-1].f+1,second_point,score=1))
-								# ax.scatter(xs=second_point[X], ys=second_point[Y], zs=second_point[Z], marker='X')
 
 							for tok in second.tokens:
 								first.add_token(tok)
 
 							second.is_valid = False
 
-							# count = 0
-							# for tok in first.tokens:
-							# 	count+=1
-							# 	ax.scatter(xs=tok.coords[X], ys=tok.coords[Y], zs=tok.coords[Z])
-							
-							# print(count)
-							# print(first.length)
+	def tok_score_sum(self, tokens):
+		score = 0
+		for tok in tokens:
+			score += tok.score
 
-
-							# plt.show()
-
+		return score
 
 def make_est(c1,c2,c3):
 	a3 = ((c3-c2)-(c2-c1))/(dT**2)			# acceleration
@@ -316,7 +337,6 @@ def score_node(est, candidate):
 		return 0
 
 def evaluate(candidates_3D, tracklet, f, f_max):
-	done = False
 	# want to stop recursion when
 	# - 3 consecutive estimates are made
 	# - f == max
@@ -326,21 +346,25 @@ def evaluate(candidates_3D, tracklet, f, f_max):
 		# are there tokens to compare?
 		# yes: compare the tokens and continue
 		# no: add the estimate as a token and continue
+		valid_cand = False
 		if candidates_3D[f] != []:
+			valid_cand = False
 			for i, cand in enumerate(candidates_3D[f]):
 				c4 = cand[CAND]
 				candidates_3D[f][i][C_INIT] = True
 				score = score_node(est, c4)
 				if score > TOKEN_SCORE_THRESH:
+					valid_cand = True
 					tracklet.add_token(Token(f, c4, score))
 					evaluate(candidates_3D, tracklet, f+1, f_max)
 					tracklet.del_token()
-		else:
+
+		if valid_cand is False:
 			if tracklet.add_est(Token(f, est)):
 				evaluate(candidates_3D, tracklet, f+1, f_max)
 				tracklet.del_token()
 			else:
-				# added 3 estimates, stop recursion and save tracklet[-3]
+				# added 3 estimates, stop recursion and save tracklet
 				tracklet.save_tracklet()
 	else:
 		# tracklet is max length
@@ -364,9 +388,26 @@ if __name__ == "__main__":
 
 	candidates_3D = np.load('candidates_3D.npy', allow_pickle=True)
 
+	# -- Plot points -- ##
+	import matplotlib.pyplot as plt
+	from mpl_toolkits.mplot3d import Axes3D
+	fig = plt.figure()
+	ax = fig.add_subplot(111, projection='3d')
+	ax.set_xlabel('x (m)')
+	ax.set_ylabel('y (m)')
+	ax.set_zlabel('z (m)')
+	ax.set_xlim(-11/2, 11/2)
+	ax.set_ylim(0, 24)
+	ax.set_zlim(0, 2)
+
+	# os.chdir("plots")
+
 	for f, frame in enumerate(candidates_3D):
 		for c, candidate in enumerate(frame):
 			candidates_3D[f][c] = [False, np.array(candidate)]
+			ax.scatter(xs=candidate[X],ys=candidate[Y],zs=candidate[Z])
+			# plt.savefig(f"{f:04d}.png")
+
 
 	## -- Shift Token Transfer -- ##
 	frame_num = len(candidates_3D)
@@ -404,6 +445,10 @@ if __name__ == "__main__":
 						if c3_c[C_INIT] is True:	continue
 						tracklet.add_token(Token(f-1,c3_c[CAND], score=1))
 
+						# c1_c[C_INIT] = True
+						# c2_c[C_INIT] = True
+						# c3_c[C_INIT] = True
+
 						if check_init_toks(c1_c[CAND],c2_c[CAND],c3_c[CAND]):
 							evaluate(candidates_3D, tracklet, f, f_max=(window+WIN_SIZE))				
 
@@ -416,35 +461,12 @@ if __name__ == "__main__":
 
 	tracklet_box.merge_tracklets()
 	tracklet_box.validate_tracklets()
+	tracklet_box.split_tracklets()
 
-	# -- Plot points -- ##
-	# import matplotlib.pyplot as plt
-	# from mpl_toolkits.mplot3d import Axes3D
-	# fig = plt.figure()
-	# ax = fig.add_subplot(111, projection='3d')
-	# ax.set_xlabel('x (m)')
-	# ax.set_ylabel('y (m)')
-	# ax.set_zlabel('z (m)')
-	# ax.set_xlim(-11E-1/2, 11E-1/2)
-	# ax.set_ylim(0, 24E-1)
-	# ax.set_zlim(0, 2E-1)
-
-	# count = 0
-	# for tracklet in tracklet_box.tracklets:
-	# 	if tracklet.is_valid:
-	# 		count+=1
-	# 		for tok in tracklet.tokens:
-	# 			ax.scatter(xs=tok.coords[X], ys=tok.coords[Y], zs=tok.coords[Z])
-	# plt.show()
-
-	# print(f"Tracklet number: {count}")
 	best_score, best_tracklet = 0, None
 	for t in tracklet_box.tracklets:
 		if t.is_valid:
-			print(t.tokens[0].coords)
-			print(t.tokens[-1].coords)
 			print(f"f_start: {t.start_frame}, f_end: {t.start_frame+t.length}, score: {t.score:0.2f}, score/tok: {t.score/t.length:0.2f}")
-			print("\n")
 
 			if t.score>best_score:
 				best_score = t.score
@@ -472,16 +494,25 @@ if __name__ == "__main__":
 	if best_tracklet is None:
 		quit()
 
-	for tok in best_tracklet.tokens:
-		print(f"f: {tok.f}, score: {tok.score}")
+	for i, tok in enumerate(best_tracklet.tokens):
 		x_points.append(tok.coords[X])
 		y_points.append(tok.coords[Y])
 		z_points.append(tok.coords[Z])
+		# ax.scatter(xs=tok.coords[X],ys=tok.coords[Y],zs=tok.coords[Z])
+		# plt.savefig(f"{i:04d}.png")
 
 	ax.scatter(xs=x_points,ys=y_points,zs=z_points,c=np.arange(len(x_points)), cmap='winter')
 
+	for t in tracklet_box.tracklets:
+		if t is not best_tracklet and t.is_valid:
+			for tok in t.tokens:
+				ax.scatter(xs=tok.coords[X],ys=tok.coords[Y],zs=tok.coords[Z])
+
 	def func(t,a,b,c,d):
 	    return a+b*t+c*t**2+d*t**3
+
+	def d1_func(t,a,b,c,d):
+		return b+2*c*t+3*d*t**2
 
 	t = np.linspace(best_tracklet.start_frame*1/90, \
 					(best_tracklet.start_frame+best_tracklet.length)*1/90, \
@@ -491,13 +522,26 @@ if __name__ == "__main__":
 	y_params, covmatrix = curve_fit(func, t, y_points)
 	z_params, covmatrix = curve_fit(func, t, z_points)
 
-	t = np.linspace(0,2,90*2)
+	t = np.linspace(0,2,1000)
 
 	x_est = func(t,*x_params)
 	y_est = func(t,*y_params)
 	z_est = func(t,*z_params)
 
+	xd1_est = d1_func(t,*x_params)
+	yd1_est = d1_func(t,*y_params)
+	zd1_est = d1_func(t,*z_params)
+
+	bounce_pos = len(z_est[z_est>0])-1
+	x_vel = xd1_est[bounce_pos]
+	y_vel = yd1_est[bounce_pos]
+	z_vel = zd1_est[bounce_pos]
+
+	print(x_vel,y_vel,z_vel)
+	print(f"velocity: {np.sqrt(x_vel**2+y_vel**2+z_vel**2):2.2f} m/s")
+
 	z_est[z_est<0] = None
+
 
 	ax.plot3D(x_est,y_est,z_est)
 	plt.show()
