@@ -11,8 +11,8 @@ Z = 2
 FPS = 90
 VM = 150	# max ball velocity
 Vm = 30		# min ball velocity
-WIN_SIZE = 30
-WIN_OVERLAP = 5
+WIN_SIZE = 40
+WIN_OVERLAP = 0
 MAX_EST = 3
 dT = 1/FPS	# inter frame time
 C_INIT = 0
@@ -28,7 +28,7 @@ thetaM = np.pi
 phiM = np.pi
 
 TRACKLET_SCORE_THRESH = 1
-TOKEN_SIM_THRESH = dM
+TOKEN_SIM_THRESH = dM/2
 TOKEN_SCORE_THRESH = 1
 SCORE_TOK_THRESH = 1
 
@@ -118,10 +118,6 @@ class TrackletBox(object):
 						second = t1
 
 					if first is not None and second is not None:
-						print(first.length)
-						print(len(first.tokens))
-						print(second.length)
-						print(len(second.tokens))
 						# if temporal overlap
 						contained = None
 						if second.start_frame+second.length < first.start_frame+first.length:
@@ -150,18 +146,15 @@ class TrackletBox(object):
 											shared_tracklets.append([first_index, second_index, cons_count])
 											break
 							# find the track with the most shared tokens
-							print(shared_tracklets)
 							if shared_tracklets != []:
 								shared_track = sorted(shared_tracklets, key=lambda x: x[2], reverse=True)[0]
 								first.tokens = first.tokens[0:shared_track[0]+1]
 								first.length = len(first.tokens)
-								print(shared_track)
+
 								for tok in second.tokens[shared_track[1]:]:
 									first.add_token(tok)
 
 								second.is_valid = False
-								# print(first.length)
-								# print(len(first.tokens))
 
 		# tracklets intersect after extrapolation
 		for t1 in self.tracklets:
@@ -351,7 +344,7 @@ def evaluate(candidates_3D, tracklet, f, f_max):
 			valid_cand = False
 			for i, cand in enumerate(candidates_3D[f]):
 				c4 = cand[CAND]
-				candidates_3D[f][i][C_INIT] = True
+				# candidates_3D[f][i][C_INIT] = True
 				score = score_node(est, c4)
 				if score > TOKEN_SCORE_THRESH:
 					valid_cand = True
@@ -384,11 +377,12 @@ if __name__ == "__main__":
 	RESOLUTION = (640,480)
 	w,h = RESOLUTION
 
-	os.chdir(ROOT_P + '\\' + 'img\\simulation_tests')
+	os.chdir(ROOT_P + '\\' + 'img\\inside_tests')
 
 	candidates_3D = np.load('candidates_3D.npy', allow_pickle=True)
 
-	# -- Plot points -- ##
+
+	## -- Plot points -- ##
 	import matplotlib.pyplot as plt
 	from mpl_toolkits.mplot3d import Axes3D
 	fig = plt.figure()
@@ -396,24 +390,17 @@ if __name__ == "__main__":
 	ax.set_xlabel('x (m)')
 	ax.set_ylabel('y (m)')
 	ax.set_zlabel('z (m)')
-	ax.set_xlim(-11/2, 11/2)
-	ax.set_ylim(0, 24)
-	ax.set_zlim(0, 2)
-
-	# os.chdir("plots")
+	ax.set_xlim(-11E-1/2, 11E-1/2)
+	ax.set_ylim(0, 24E-1)
+	ax.set_zlim(0, 3E-1)
 
 	for f, frame in enumerate(candidates_3D):
 		for c, candidate in enumerate(frame):
 			candidates_3D[f][c] = [False, np.array(candidate)]
-			ax.scatter(xs=candidate[X],ys=candidate[Y],zs=candidate[Z])
-			# plt.savefig(f"{f:04d}.png")
-
 
 	## -- Shift Token Transfer -- ##
 	frame_num = len(candidates_3D)
 	num_windows = int(np.floor(frame_num/WIN_SIZE))
-
-	windows = num_windows*[None]
 
 	tracklet_box = TrackletBox()
 	for window in range(0,num_windows*WIN_SIZE,(WIN_SIZE-WIN_OVERLAP)):
@@ -445,9 +432,9 @@ if __name__ == "__main__":
 						if c3_c[C_INIT] is True:	continue
 						tracklet.add_token(Token(f-1,c3_c[CAND], score=1))
 
-						# c1_c[C_INIT] = True
-						# c2_c[C_INIT] = True
-						# c3_c[C_INIT] = True
+						c1_c[C_INIT] = True
+						c2_c[C_INIT] = True
+						c3_c[C_INIT] = True
 
 						if check_init_toks(c1_c[CAND],c2_c[CAND],c3_c[CAND]):
 							evaluate(candidates_3D, tracklet, f, f_max=(window+WIN_SIZE))				
@@ -459,6 +446,11 @@ if __name__ == "__main__":
 			init_set = False
 			c1,c2,c3,c4 = [],[],[],[]
 
+	for tracklet in tracklet_box.tracklets:
+		for tok in tracklet.tokens:
+			ax.scatter(xs=tok.coords[X],ys=tok.coords[Y],zs=tok.coords[Z])
+	# 	plt.show()
+	# quit()
 	tracklet_box.merge_tracklets()
 	tracklet_box.validate_tracklets()
 	tracklet_box.split_tracklets()
@@ -481,9 +473,9 @@ if __name__ == "__main__":
 	ax.set_xlabel('x (m)')
 	ax.set_ylabel('y (m)')
 	ax.set_zlabel('z (m)')
-	ax.set_xlim(-11/2, 11/2)
-	ax.set_ylim(0, 24)
-	ax.set_zlim(0, 2)
+	ax.set_xlim(-11E-1/2, 11E-1/2)
+	ax.set_ylim(0, 24E-1)
+	ax.set_zlim(0, 3E-1)
 
 	from scipy.optimize import curve_fit
 
@@ -498,15 +490,16 @@ if __name__ == "__main__":
 		x_points.append(tok.coords[X])
 		y_points.append(tok.coords[Y])
 		z_points.append(tok.coords[Z])
+		# print(tok.f)
 		# ax.scatter(xs=tok.coords[X],ys=tok.coords[Y],zs=tok.coords[Z])
 		# plt.savefig(f"{i:04d}.png")
 
 	ax.scatter(xs=x_points,ys=y_points,zs=z_points,c=np.arange(len(x_points)), cmap='winter')
 
-	for t in tracklet_box.tracklets:
-		if t is not best_tracklet and t.is_valid:
-			for tok in t.tokens:
-				ax.scatter(xs=tok.coords[X],ys=tok.coords[Y],zs=tok.coords[Z])
+	# for t in tracklet_box.tracklets:
+	# 	if t is not best_tracklet and t.is_valid:
+	# 		for tok in t.tokens:
+	# 			ax.scatter(xs=tok.coords[X],ys=tok.coords[Y],zs=tok.coords[Z])
 
 	def func(t,a,b,c,d):
 	    return a+b*t+c*t**2+d*t**3
