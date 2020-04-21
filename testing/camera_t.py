@@ -6,10 +6,10 @@ import queue
 import numpy as np
 from operator import itemgetter
 
-TEST_F = 'inside_tests'
+TEST_F = 'simulation_tests'
 IMG_F = 'img'
 DATA_F = 'data'
-CAM_F = 'left'
+CAM_F = 'right'
 LEFT_F = 'left'
 RIGHT_F = 'right'
 OUT_F = 'out'
@@ -142,7 +142,7 @@ def process_img(img_f, img_queue, active_test_dir, out_q):
 
 			total_time = total_time + (time.time_ns()-start)
 			# sort ball candidates by size and keep the top 100
-			# ball_candidates = ball_candidates[ball_candidates[:,SIZE].argsort()[::-1][:N_OBJECTS]]
+			ball_candidates = ball_candidates[ball_candidates[:,SIZE].argsort()[::-1][:N_OBJECTS]]
 
 			out_q.put([frame, ball_candidates])
 
@@ -191,116 +191,116 @@ def read_img(cam_f, queue_list, active_test_dir):
 	return
 
 if __name__ == "__main__":
-	ball_candidates_out = []
-
-	# get list of test data directories
-	os.chdir(TEST_P + '\\' + CAM_F + '\\' + IMG_F)
-	test_directories = os.listdir()
-	os.chdir(TEST_P + '\\' + CAM_F + '\\' + OUT_F)
-	for directory in test_directories:
-		try:
-			os.mkdir(directory)
-		except FileExistsError:
-			pass
-
-	# directory = test_directories[4]
-	# print(directory)
-	for directory in test_directories:
-
-
-		active_test_dir = str(directory)
-		process_list = []
-		queue_list = []
-		out_q = mp.JoinableQueue()
-
-		# get_std_mean(LEFT_F, active_test_dir)
-		# get_std_mean(RIGHT_F, active_test_dir)
- 
-		for i in range(NUM_PROCESSORS):
-			q = mp.JoinableQueue()
-			queue_list.append(q)
-			proc = mp.Process(target=process_img, args=(CAM_F, q, active_test_dir, out_q))
-			proc.start()
-			process_list.append(proc)
-
-		read_img_proc = mp.Process(target=read_img, args=(CAM_F, queue_list, active_test_dir))
-		read_img_proc.start()
-
-
-		read_img_proc.join()
-		for q in queue_list:
-			q.join()
-
-		while True:
-			try:
-				candidate = out_q.get_nowait()
-				ball_candidates_out.append(candidate)
-
-			except queue.Empty:
-				break
-		
-		# sort all the ball candidates
-		ball_candidates_out.sort(key=itemgetter(0))
-
-		os.chdir(TEST_P + '\\' + CAM_F + '\\' + DATA_F + '\\' + active_test_dir)
-		np.save(CAM_F+'_ball_candidates.npy', ball_candidates_out)
+	for CAM_F in ['left','right']:
 		ball_candidates_out = []
 
-		# os.chdir(TEST_P + '\\' + CAM_F + '\\' + DATA_F + '\\' + active_test_dir)
-		# points = np.load("points_full.npy", allow_pickle=True)
-		# make video from image dif
-		img_list = []
-		C_list = []
-
-		os.chdir(TEST_P + '\\' + CAM_F + '\\' + OUT_F + '\\' + active_test_dir)
-		im_names = os.listdir()
-		pos = 0
-		dist = 5
-		for im in im_names:
-			if 'C' in im:
-				img = cv2.imread(im)
-				C_list.append(img)
-			else:
-				img = cv2.imread(im)
-				img_list.append(img)
-				# num_c = len(ball_candidates_out[pos][1])
-				# num_true = 0
-				# num_balls = 0
-				# num_false = 0
-				# if points[pos,0,0] is not None:
-				# 	num_balls = 1
-				# for cand in ball_candidates_out[pos][1]:
-				# 	# print(points[pos,0,0])
-				# 	if points[pos,0,0] is not None:
-				# 		if np.sqrt((cand[X]-points[pos,0,0])**2+(cand[Y]-points[pos,0,1])**2) <= dist:
-				# 			num_true += 1
-				# 			num_false = num_c-num_true
-				# 	else:
-				# 		num_false = num_c
-				# if pos%4 == 0:
-				# print(f"{num_balls}	{num_true}	{num_false}")
-					# print(f"{len(ball_candidates_out[pos][1])}")
-					# if pos>=136:
-					# 	cv2.imshow(f"{pos}", img)
-					# 	cv2.waitKey(0)
-					# 	cv2.destroyAllWindows()
-				pos+=1
-
-		# os.chdir(TEST_P + '\\' + RIGHT_F + '\\' + OUT_F + '\\' + active_test_dir)
-		# im_names = os.listdir()
-		# for im in im_names:
-		# 	C_list.append(cv2.imread(im))
-
+		# get list of test data directories
+		os.chdir(TEST_P + '\\' + CAM_F + '\\' + IMG_F)
+		test_directories = os.listdir()
 		os.chdir(TEST_P + '\\' + CAM_F + '\\' + OUT_F)
-		
-		output = f"{active_test_dir}.mp4"
-		fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-		out = cv2.VideoWriter(output, fourcc, 30, (w,h*2))
+		for directory in test_directories:
+			try:
+				os.mkdir(directory)
+			except FileExistsError:
+				pass
 
-		for i, img in enumerate(img_list):
-			print(i)
-			out_img = cv2.vconcat([img,C_list[i]])
-			out.write(out_img)
+		# directory = test_directories[4]
+		# print(directory)
+		for directory in test_directories[:]:
 
-		out.release()
-		print(f"{active_test_dir} done")
+			active_test_dir = str(directory)
+			process_list = []
+			queue_list = []
+			out_q = mp.JoinableQueue()
+
+			# get_std_mean(LEFT_F, active_test_dir)
+			# get_std_mean(RIGHT_F, active_test_dir)
+
+			for i in range(NUM_PROCESSORS):
+				q = mp.JoinableQueue()
+				queue_list.append(q)
+				proc = mp.Process(target=process_img, args=(CAM_F, q, active_test_dir, out_q))
+				proc.start()
+				process_list.append(proc)
+
+			read_img_proc = mp.Process(target=read_img, args=(CAM_F, queue_list, active_test_dir))
+			read_img_proc.start()
+
+
+			read_img_proc.join()
+			for q in queue_list:
+				q.join()
+
+			while True:
+				try:
+					candidate = out_q.get_nowait()
+					ball_candidates_out.append(candidate)
+
+				except queue.Empty:
+					break
+			
+			# sort all the ball candidates
+			ball_candidates_out.sort(key=itemgetter(0))
+
+			os.chdir(TEST_P)
+			np.save(CAM_F+'_ball_candidates.npy', ball_candidates_out)
+			ball_candidates_out = []
+
+			# os.chdir(TEST_P + '\\' + CAM_F + '\\' + DATA_F + '\\' + active_test_dir)
+			# points = np.load("points_full.npy", allow_pickle=True)
+			# make video from image dif
+			img_list = []
+			C_list = []
+
+			os.chdir(TEST_P + '\\' + CAM_F + '\\' + OUT_F + '\\' + active_test_dir)
+			im_names = os.listdir()
+			pos = 0
+			dist = 5
+			for im in im_names:
+				if 'C' in im:
+					img = cv2.imread(im)
+					C_list.append(img)
+				else:
+					img = cv2.imread(im)
+					img_list.append(img)
+					# num_c = len(ball_candidates_out[pos][1])
+					# num_true = 0
+					# num_balls = 0
+					# num_false = 0
+					# if points[pos,0,0] is not None:
+					# 	num_balls = 1
+					# for cand in ball_candidates_out[pos][1]:
+					# 	# print(points[pos,0,0])
+					# 	if points[pos,0,0] is not None:
+					# 		if np.sqrt((cand[X]-points[pos,0,0])**2+(cand[Y]-points[pos,0,1])**2) <= dist:
+					# 			num_true += 1
+					# 			num_false = num_c-num_true
+					# 	else:
+					# 		num_false = num_c
+					# if pos%4 == 0:
+					# print(f"{num_balls}	{num_true}	{num_false}")
+						# print(f"{len(ball_candidates_out[pos][1])}")
+						# if pos>=136:
+						# 	cv2.imshow(f"{pos}", img)
+						# 	cv2.waitKey(0)
+						# 	cv2.destroyAllWindows()
+					pos+=1
+
+			# os.chdir(TEST_P + '\\' + RIGHT_F + '\\' + OUT_F + '\\' + active_test_dir)
+			# im_names = os.listdir()
+			# for im in im_names:
+			# 	C_list.append(cv2.imread(im))
+
+			os.chdir(TEST_P + '\\' + CAM_F + '\\' + OUT_F)
+			
+			output = f"{active_test_dir}.mp4"
+			fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+			out = cv2.VideoWriter(output, fourcc, 30, (w,h*2))
+
+			for i, img in enumerate(img_list):
+				print(i)
+				out_img = cv2.vconcat([img,C_list[i]])
+				out.write(out_img)
+
+			out.release()
+			print(f"{active_test_dir} done")
