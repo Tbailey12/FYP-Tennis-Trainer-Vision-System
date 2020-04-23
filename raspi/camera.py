@@ -86,7 +86,7 @@ def ImageProcessor(unprocessed_frames, processed_frames, proc_complete, event_ma
     y_data = np.zeros((h,w))
     img_temp = np.zeros((3,h,w))
     C_temp = np.zeros((3,h,w))
-    # temp_img = np.zeros((h,w))
+    temp_img = np.zeros((h,w))
     ########## FOR TESTING ##############
 
     last_n_frame = 0

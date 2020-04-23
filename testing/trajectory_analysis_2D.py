@@ -5,27 +5,43 @@ import copy
 
 ROOT_P = 'D:\\documents\\local uni\\FYP\\code'
 
-X = 0
-Y = 1
-Z = 2
-FPS = 90
-VM = 150	# max ball velocity
-Vm = 30		# min ball velocity
-# WIN_SIZE = 40
-# WIN_OVERLAP = 0
+FRAME_NUM = 0
+FRAME_DATA = 1
+CAND_W = 0
+CAND_H = 1
+CAND_S = 2
+CAND_X = 3
+CAND_Y = 4
+CAND_INIT = 0
+CAND_DATA = 1
+
+COORD_X = 0
+COORD_Y = 1
+
+
+VM = 150			# max ball velocity
+FRAMERATE = 90
+dT = 1/FRAMERATE	# inter frame time
+WIN_SIZE = 30
+WIN_OVERLAP = 5
 MAX_EST = 3
-dT = 1/FPS	# inter frame time
-C_INIT = 0
-CAND = 1
 EXTRAPOLATE_N = 3
+MIN_SHARED_TOKS = 3
+
+
+# X = 0
+# Y = 1
+# Z = 2
+# Vm = 30		# min ball velocity
+# C_INIT = 0
+# CAND = 1
 
 
 def kph_2_mps(kph):
 	return kph*10/36
 
-dM = kph_2_mps(VM)*dT 	# max dist
+dM = 100			# max dist in px
 thetaM = np.pi
-phiM = np.pi
 
 TRACKLET_SCORE_THRESH = 1
 TOKEN_SIM_THRESH = dM/2
@@ -81,7 +97,8 @@ class TrackletBox(object):
 							self.tracklets.append(new_track)
 							split_start_f = k
 
-
+	# def connect_tracklets(self, connections):
+		
 
 	def merge_tracklets(self):
 		## -- Same start frame -- ##
@@ -99,28 +116,33 @@ class TrackletBox(object):
 							t2.is_valid = False
 
 		# -- Temporal overlap -- ##
-		for t1 in self.tracklets:
-			if not t1.is_valid:
+		connections = [[] for x in range(len(self.tracklets))]
+		connected = []
+
+		for t1, tracklet_1 in enumerate(self.tracklets):
+			if not self.tracklets[t1].is_valid:
 				continue
 
-			for t2 in self.tracklets:
-				if t1 is not t2 and t1.is_valid and t2.is_valid:
+			for t2, tracklet_2 in enumerate(self.tracklets):
+				if self.tracklets[t1] is not self.tracklets[t2] and self.tracklets[t1].is_valid and self.tracklets[t2].is_valid:
 					# check for temporal overlap
 					first = None
 					second = None
-					if t2.start_frame > t1.start_frame and t2.start_frame <= t1.start_frame+t1.length:
-						# t2 starts inside t1
+					if self.tracklets[t2].start_frame > self.tracklets[t1].start_frame and self.tracklets[t2].start_frame <= self.tracklets[t1].start_frame+self.tracklets[t1].length:
+						# self.tracklets[t2] starts inside self.tracklets[t1]
 						first = t1
 						second = t2
-					elif t1.start_frame > t2.start_frame and t1.start_frame <= t2.start_frame+t2.length:
-						# t1 starts inside t2
+					elif self.tracklets[t1].start_frame > self.tracklets[t2].start_frame and self.tracklets[t1].start_frame <= self.tracklets[t2].start_frame+self.tracklets[t2].length:
+						# self.tracklets[t1] starts inside self.tracklets[t2]
 						first = t2
 						second = t1
 
 					if first is not None and second is not None:
+						print(f"first_s: {self.tracklets[first].start_frame}, {self.tracklets[first].start_frame+self.tracklets[first].length}")
+						print(f"second_s: {self.tracklets[second].start_frame}, {self.tracklets[second].start_frame+self.tracklets[second].length}")
 						# if temporal overlap
 						contained = None
-						if second.start_frame+second.length < first.start_frame+first.length:
+						if self.tracklets[second].start_frame+self.tracklets[second].length < self.tracklets[first].start_frame+self.tracklets[first].length:
 							contained = True
 						else:
 							contained = False
@@ -129,101 +151,109 @@ class TrackletBox(object):
 							pass
 						else:
 							shared_tracklets = []
-							for token1 in reversed(first.tokens):
+							for token1 in reversed(self.tracklets[first].tokens):
 								cons = False
 								cons_count = 0
 
-								for token2 in second.tokens:
+								for token2 in self.tracklets[second].tokens:
 									sim = token1.calc_similarity(token2)
 
 									if sim < TOKEN_SIM_THRESH:
 										cons = True
 										cons_count += 1
-										first_index = first.tokens.index(token1)
-										second_index = second.tokens.index(token2)
+										t1_index = self.tracklets[first].tokens.index(token1)
+										t2_index = self.tracklets[second].tokens.index(token2)
 									else:
 										if cons is True:
-											shared_tracklets.append([first_index, second_index, cons_count])
+											shared_tracklets.append([t1_index, t2_index, cons_count])
 											break
 							# find the track with the most shared tokens
 							if shared_tracklets != []:
 								shared_track = sorted(shared_tracklets, key=lambda x: x[2], reverse=True)[0]
-								first.tokens = first.tokens[0:shared_track[0]+1]
-								first.length = len(first.tokens)
+								if shared_track[2] >= MIN_SHARED_TOKS:
+									connections[t1] = [t1,t2,shared_track[0],shared_track[1]]
+									connected.append(t2)
 
-								for tok in second.tokens[shared_track[1]:]:
-									first.add_token(tok)
-
-								second.is_valid = False
+		# for con_i, con in enumerate(connections):
+		# 	# if the tracklet is an initial tracklet, not joined to another.
+		# 	if con_i is not in connected:
+		# 		self.connect_tracklets(connections, con_i)
+		
+		# for connected_t in connected_tracklets:
+		# 	for t in connected_t:
+		# 		print(f"s_frame: {t.start_frame}, len: {t.length}, score: {t.score}")
+				# self.add_tracklet(t)
+		# add all these tracklets to self.tracklets
 
 		# tracklets intersect after extrapolation
-		for t1 in self.tracklets:
-			if not t1.is_valid:
-				continue
-			for t2 in self.tracklets:
-				if not t2.is_valid:
-					continue
-				first = None
-				second = None
-				if t1.start_frame+t1.length < t2.start_frame:
-					first = t1
-					second = t2
-				elif t2.start_frame+t2.length < t1.start_frame:
-					first = t2
-					second = t1
+		# for t1 in self.tracklets:
+		# 	if not t1.is_valid:
+		# 		continue
+		# 	for t2 in self.tracklets:
+		# 		if not t2.is_valid:
+		# 			continue
+		# 		first = None
+		# 		second = None
+		# 		if t1.start_frame+t1.length < t2.start_frame:
+		# 			first = t1
+		# 			second = t2
+		# 		elif t2.start_frame+t2.length < t1.start_frame:
+		# 			first = t2
+		# 			second = t1
 
 
-				if first is not None and second is not None:
-					if first.length > 3 and second.length > 3:
-						first_extrapolation_points = []
-						second_extrapolation_points = []
+		# 		if first is not None and second is not None:
+		# 			if first.length > 3 and second.length > 3:
+		# 				first_extrapolation_points = []
+		# 				second_extrapolation_points = []
 
-						for i in range(3):
-							first_extrapolation_points.append(first.tokens[i-3].coords)
-							second_extrapolation_points.append(second.tokens[2-i].coords)
+		# 				for i in range(3):
+		# 					first_extrapolation_points.append(first.tokens[i-3].data)
+		# 					second_extrapolation_points.append(second.tokens[2-i].data)
 
-						for i in range(EXTRAPOLATE_N):
-							first_extrapolation_points.append(
-								make_est(	first_extrapolation_points[-3],
-											first_extrapolation_points[-2],
-											first_extrapolation_points[-1]))
+		# 				for i in range(EXTRAPOLATE_N):
+		# 					first_extrapolation_points.append(
+		# 						make_est(	first_extrapolation_points[-3],
+		# 									first_extrapolation_points[-2],
+		# 									first_extrapolation_points[-1]))
 							
-							second_extrapolation_points.append(
-								make_est(	second_extrapolation_points[-3],
-											second_extrapolation_points[-2],
-											second_extrapolation_points[-1]))
+		# 					second_extrapolation_points.append(
+		# 						make_est(	second_extrapolation_points[-3],
+		# 									second_extrapolation_points[-2],
+		# 									second_extrapolation_points[-1]))
 
-						first_extrapolation_points = first_extrapolation_points[-EXTRAPOLATE_N:]
-						second_extrapolation_points = second_extrapolation_points[-EXTRAPOLATE_N:]
+		# 				first_extrapolation_points = first_extrapolation_points[-EXTRAPOLATE_N:]
+		# 				second_extrapolation_points = second_extrapolation_points[-EXTRAPOLATE_N:]
 
-						best_match = TOKEN_SIM_THRESH
-						best_f_p = None
-						best_s_p = None
-						for i, f_p in enumerate(first_extrapolation_points):
-							for j, s_p in enumerate(second_extrapolation_points):
-								sim = calc_dist(f_p-s_p)
-								if sim < TOKEN_SIM_THRESH:
-									best_match = sim
-									best_f_p = i
-									best_s_p = j
-									break
-							if best_f_p is not None:
-								break
+		# 				best_match = TOKEN_SIM_THRESH
+		# 				best_f_p = None
+		# 				best_s_p = None
 
-						if best_f_p is not None and best_s_p is not None:
-							new_first_points = first_extrapolation_points[:i]
-							new_second_points = second_extrapolation_points[:j]
+		# 				for i, f_p in enumerate(first_extrapolation_points):
+		# 					for j, s_p in enumerate(second_extrapolation_points):
+		# 						sim = calc_dist(f_p[CAND_X:]-s_p[CAND_X:])
+		# 						if sim < TOKEN_SIM_THRESH:
+		# 							best_match = sim
+		# 							best_f_p = i
+		# 							best_s_p = j
+		# 							break
+		# 					if best_f_p is not None:
+		# 						break
 
-							for first_point in new_first_points:
-								first.add_token(Token(first.tokens[-1].f+1,first_point,score=1))
+		# 				if best_f_p is not None and best_s_p is not None:
+		# 					new_first_points = first_extrapolation_points[:i]
+		# 					new_second_points = second_extrapolation_points[:j]
 
-							for second_point in reversed(new_second_points):
-								first.add_token(Token(first.tokens[-1].f+1,second_point,score=1))
+		# 					for first_point in new_first_points:
+		# 						first.add_token(Token(first.tokens[-1].f+1,first_point,score=1))
 
-							for tok in second.tokens:
-								first.add_token(tok)
+		# 					for second_point in reversed(new_second_points):
+		# 						first.add_token(Token(first.tokens[-1].f+1,second_point,score=1))
 
-							second.is_valid = False
+		# 					for tok in second.tokens:
+		# 						first.add_token(tok)
+
+		# 					second.is_valid = False
 
 	def tok_score_sum(self, tokens):
 		score = 0
@@ -277,7 +307,9 @@ class Tracklet(object):
 
 	def est_next(self):
 		if self.length >= 3:
-			est = make_est(self.tokens[-3].coords,self.tokens[-2].coords,self.tokens[-1].coords)
+			est = make_est(	self.tokens[-3].data,\
+							self.tokens[-2].data,\
+							self.tokens[-1].data)
 			return est
 		else:
 			return None
@@ -292,48 +324,46 @@ class Tracklet(object):
 			return False
 
 class Token(object):
-	def __init__(self, f, coords, score=0):
+	def __init__(self, f, data, score=0):
 		self.f = f 
-		self.coords = coords
+		self.data = data
 		self.score = score
 		self.is_valid = True
 
 	def calc_similarity(self, token):
-		error = self.coords-token.coords
+		error = self.data[CAND_X:]-token.data[CAND_X:]
 		return calc_dist(error)
 
 def calc_dist(vect):
 	a = 0
-	for el in vect[:3]:
+	for el in vect:
 		a += el**2
 
 	return np.sqrt(a)
 
-def calc_theta_phi(diff, r):
-	r_p = np.sqrt(diff[X]**2+diff[Y]**2)
+def calc_theta(diff, r):
+	r_p = np.sqrt(diff[COORD_X]**2+diff[COORD_Y]**2)
 
-	theta = np.arccos(diff[Y]/r_p)
-	phi = np.arccos(r_p/r)
-	return theta, phi
+	theta = np.arccos(diff[COORD_Y]/r_p)
+	return theta
 
 def score_node(est, candidate):
-	diff = est-candidate
+	diff = est[CAND_X:]-candidate[CAND_X:]
 	r = calc_dist(diff)
-	theta, phi = calc_theta_phi(diff, r)
-
+	theta = calc_theta(diff, r)
+	
 	if r<dM:
 		s1 = np.exp(-r/dM)
 		s2 = np.exp(-theta/thetaM)
-		s3 = np.exp(-phi/phiM)
-		return s1+s2+s3
+
+		return s1+s2
 	else:
 		return 0
 
-def evaluate(candidates_3D, tracklet, f, f_max):
+def evaluate(candidates, tracklet, f, f_max):
 	# want to stop recursion when
 	# - 3 consecutive estimates are made
 	# - f == max
-	print(f)
 	if f < f_max:
 		est = tracklet.est_next()
 
@@ -341,21 +371,21 @@ def evaluate(candidates_3D, tracklet, f, f_max):
 		# yes: compare the tokens and continue
 		# no: add the estimate as a token and continue
 		valid_cand = False
-		if candidates_3D[f] != []:
+		if candidates[f] != []:
 			valid_cand = False
-			for i, cand in enumerate(candidates_3D[f]):
-				c4 = cand[CAND]
-				candidates_3D[f][i][C_INIT] = True
+			for i, cand in enumerate(candidates[f]):
+				c4 = cand[CAND_DATA]
+				cand[CAND_INIT] = True
 				score = score_node(est, c4)
 				if score > TOKEN_SCORE_THRESH:
 					valid_cand = True
 					tracklet.add_token(Token(f, c4, score))
-					evaluate(candidates_3D, tracklet, f+1, f_max)
+					evaluate(candidates, tracklet, f+1, f_max)
 					tracklet.del_token()
 
 		if valid_cand is False:
 			if tracklet.add_est(Token(f, est)):
-				evaluate(candidates_3D, tracklet, f+1, f_max)
+				evaluate(candidates, tracklet, f+1, f_max)
 				tracklet.del_token()
 			else:
 				# added 3 estimates, stop recursion and save tracklet
@@ -375,59 +405,72 @@ def check_init_toks(c1,c2,c3):
 		return False
 
 
-def get_tracklets(candidates_3D):
-	for f, frame in enumerate(candidates_3D):
-		for c, candidate in enumerate(frame):
-			candidates_3D[f][c] = [False, np.array(candidate)]
-
-	## -- Shift Token Transfer -- ##
-	frame_num = len(candidates_3D)
-
+def get_tracklets(candidates):
+	num_frames = len(candidates)
 	tracklet_box = TrackletBox()
+	
+	for f in range(num_frames):
+		win_start = 0
+		win_end = 0
 
-	init_set = False
-	c1,c2,c3,c4 = [],[],[],[]
+		if f == 0:
+			win_start = 0
+			win_end = win_start+WIN_SIZE
 
-	for f in range(3,frame_num):
-		if init_set is False:
-			c1 = candidates_3D[f-3]
-			c2 = candidates_3D[f-2]
-			c3 = candidates_3D[f-1]
+		elif f % WIN_SIZE == 0 and f != 0:
+			win_start = f-WIN_OVERLAP
+			win_end = f+WIN_SIZE
 
-			if (c1 == []) or (c2 == []) or (c3 == []):
-				continue
-			else:
-				init_set = True
+			if win_end > num_frames:
+				win_end = num_frames
 
-		tracklet = Tracklet(f, tracklet_box)
-		for c1_c in c1:
-			if c1_c[C_INIT] is True:	continue
-			tracklet.add_token(Token(f-3,c1_c[CAND], score=1))
-			for c2_c in c2:
-				if c2_c[C_INIT] is True:	continue
-				tracklet.add_token(Token(f-2,c2_c[CAND], score=1))
-				for c3_c in c3:
-					if c3_c[C_INIT] is True:	continue
-					tracklet.add_token(Token(f-1,c3_c[CAND], score=1))
-
-					# c1_c[C_INIT] = True
-					# c2_c[C_INIT] = True
-					# c3_c[C_INIT] = True
-
-					if check_init_toks(c1_c[CAND],c2_c[CAND],c3_c[CAND]):
-						evaluate(candidates_3D, tracklet, f, f_max=(frame_num))				
-
-					tracklet.del_token()
-				tracklet.del_token()
-			tracklet.del_token()
+			for frame in candidates:
+				for cand in frame:
+					cand[CAND_INIT] = False
+		
+		else:
+			continue
 
 		init_set = False
-		c1,c2,c3,c4 = [],[],[],[]
+		c1,c2,c3 = [],[],[]
 
-	tracklet_box.merge_tracklets()
-	tracklet_box.validate_tracklets()
-	tracklet_box.split_tracklets()
+		for cur_frame in range(win_start+3, win_end):
+			if init_set is False:
+				c1 = candidates[cur_frame-3]
+				c2 = candidates[cur_frame-2]
+				c3 = candidates[cur_frame-1]
 
+				if len(c1) == 0 or len(c2) == 0 or len(c3) ==0:
+					continue
+				else:
+					init_set = True
+
+			if init_set:
+				tracklet = Tracklet(cur_frame-3, tracklet_box)
+				for c1_c in c1:
+					if c1_c[CAND_INIT] is True:	continue
+					tracklet.add_token(Token(cur_frame-3, c1_c[CAND_DATA], score=1))
+					for c2_c in c2:
+						if c2_c[CAND_INIT] is True:	continue
+						tracklet.add_token(Token(cur_frame-2, c2_c[CAND_DATA], score=1))
+						for c3_c in c3:
+							if c3_c[CAND_INIT] is True:	continue
+							tracklet.add_token(Token(cur_frame-1, c3_c[CAND_DATA], score=1))
+
+							c1_c[CAND_INIT] = True
+							c2_c[CAND_INIT] = True
+							c3_c[CAND_INIT] = True
+
+							evaluate(candidates, tracklet, cur_frame, win_end)
+
+							tracklet.del_token()
+						tracklet.del_token()
+					tracklet.del_token()
+
+				init_set = False
+				c1,c2,c3 = [],[],[]
+
+	# tracklet_box.merge_tracklets()
 	return tracklet_box
 
 def find_best_tracklet(tracklet_box):
@@ -452,84 +495,131 @@ if __name__ == "__main__":
 	RESOLUTION = (640,480)
 	w,h = RESOLUTION
 
-	os.chdir(ROOT_P + '\\' + 'img\\inside_tests_2')
+	os.chdir(ROOT_P + '\\' + 'img\\simulation_tests')
 
-	candidates_3D = np.load('candidates_3D.npy', allow_pickle=True)
+	left_candidates_l = np.load('left_ball_candidates.npy', allow_pickle=True)
+	right_candidates_l = np.load('right_ball_candidates.npy', allow_pickle=True)
+
+	left_candidates = []
+	right_candidates = []
+
+	# check all frames exist
+	for f in range(int(left_candidates_l[-1][FRAME_NUM])+1):
+		if f == int(left_candidates_l[f][FRAME_NUM]):
+			candidates = []
+			for cand in left_candidates_l[f][FRAME_DATA]:
+				candidates.append([False,cand])
+			left_candidates.append(candidates)
+
+		else:
+			left_candidates.append([])
+
+	for f in range(int(right_candidates_l[-1][FRAME_NUM])+1):
+		if f == int(right_candidates_l[f][FRAME_NUM]):
+			candidates = []
+			for cand in right_candidates_l[f][FRAME_DATA]:
+				candidates.append([False,cand])
+			right_candidates.append(candidates)
+		else:
+			right_candidates.append([])
+
+	# trim candidates
+	min_len = min(len(left_candidates), len(right_candidates))
+	left_candidates = left_candidates[:min_len]
+	right_candidates = right_candidates[:min_len]
 
 	# -- Plot points -- ##
 	import matplotlib.pyplot as plt
 	from mpl_toolkits.mplot3d import Axes3D
 	fig = plt.figure()
 	ax = fig.add_subplot(111, projection='3d')
-	ax.set_xlabel('x (m)')
-	ax.set_ylabel('y (m)')
-	ax.set_zlabel('z (m)')
-	ax.set_xlim(-11E-1/2, 11E-1/2)
-	ax.set_ylim(0, 24E-1)
-	ax.set_zlim(0, 3E-1)
+	ax.set_xlabel('x (px)')
+	ax.set_ylabel('y (px)')
+	ax.set_zlabel('frame')
+	ax.set_xlim(0, w)
+	ax.set_ylim(0, h)
+	ax.set_zlim(min_len,0)
 
-	for frame in candidates_3D:
-		for cand in frame:
-			ax.scatter(xs=cand[0],ys=cand[1],zs=cand[2])
+	# for f, frame in enumerate(left_candidates):
+	# 	if frame != []:
+	# 		for cand in frame:
+	# 			ax.scatter(xs=cand[CAND_DATA][CAND_X],ys=cand[CAND_DATA][CAND_Y],zs=f)
+
+	# plt.show()
+
+	left_tracklets = get_tracklets(left_candidates)
+
+	for t in left_tracklets.tracklets:
+		if t.is_valid:
+			print(t.start_frame, t.start_frame+t.length)
+			for tok in t.tokens:
+				ax.scatter(xs=tok.data[CAND_X],ys=tok.data[CAND_Y],zs=tok.f)
+
+	plt.show()
+
+
+	# for frame in candidates_3D:
+	# 	for cand in frame:
+	# 		ax.scatter(xs=cand[0],ys=cand[1],zs=cand[2])
 	
-	plt.show()
-	quit()
+	# plt.show()
+	# quit()
 
-	tracklet_box = get_tracklets(candidates_3D)
+	# tracklet_box = get_tracklets(candidates_3D)
 
-	best_tracklet = find_best_tracklet(tracklet_box)
+	# best_tracklet = find_best_tracklet(tracklet_box)
 
-	from scipy.optimize import curve_fit
+	# from scipy.optimize import curve_fit
 
-	x_points = []
-	y_points = []
-	z_points = []
+	# x_points = []
+	# y_points = []
+	# z_points = []
 
-	if best_tracklet is None:
-		quit()
+	# if best_tracklet is None:
+	# 	quit()
 
-	for i, tok in enumerate(best_tracklet.tokens):
-		x_points.append(tok.coords[X])
-		y_points.append(tok.coords[Y])
-		z_points.append(tok.coords[Z])
+	# for i, tok in enumerate(best_tracklet.tokens):
+	# 	x_points.append(tok.coords[X])
+	# 	y_points.append(tok.coords[Y])
+	# 	z_points.append(tok.coords[Z])
 
-	ax.scatter(xs=x_points,ys=y_points,zs=z_points,c=np.arange(len(x_points)), cmap='winter')
+	# ax.scatter(xs=x_points,ys=y_points,zs=z_points,c=np.arange(len(x_points)), cmap='winter')
 
-	t = np.linspace(best_tracklet.start_frame*1/90, \
-					(best_tracklet.start_frame+best_tracklet.length)*1/90, \
-					best_tracklet.length)
+	# t = np.linspace(best_tracklet.start_frame*1/90, \
+	# 				(best_tracklet.start_frame+best_tracklet.length)*1/90, \
+	# 				best_tracklet.length)
 
-	x_params, covmatrix = curve_fit(curve_func, t, x_points)
-	y_params, covmatrix = curve_fit(curve_func, t, y_points)
-	z_params, covmatrix = curve_fit(curve_func, t, z_points)
+	# x_params, covmatrix = curve_fit(curve_func, t, x_points)
+	# y_params, covmatrix = curve_fit(curve_func, t, y_points)
+	# z_params, covmatrix = curve_fit(curve_func, t, z_points)
 
-	t = np.linspace(0,2,1000)
+	# t = np.linspace(0,2,1000)
 
-	x_est = curve_func(t,*x_params)
-	y_est = curve_func(t,*y_params)
-	z_est = curve_func(t,*z_params)
+	# x_est = curve_func(t,*x_params)
+	# y_est = curve_func(t,*y_params)
+	# z_est = curve_func(t,*z_params)
 
-	xd1_est = d1_curve_func(t,*x_params)
-	yd1_est = d1_curve_func(t,*y_params)
-	zd1_est = d1_curve_func(t,*z_params)
+	# xd1_est = d1_curve_func(t,*x_params)
+	# yd1_est = d1_curve_func(t,*y_params)
+	# zd1_est = d1_curve_func(t,*z_params)
 
-	for i, z in enumerate(z_est):
-		if z<=0:
-			bounce_pos = i
-			break
-	# bounce_pos = len(z_est[z_est>0])-1
+	# for i, z in enumerate(z_est):
+	# 	if z<=0:
+	# 		bounce_pos = i
+	# 		break
+	# # bounce_pos = len(z_est[z_est>0])-1
 
-	x_vel = xd1_est[bounce_pos]
-	y_vel = yd1_est[bounce_pos]
-	z_vel = zd1_est[bounce_pos]
+	# x_vel = xd1_est[bounce_pos]
+	# y_vel = yd1_est[bounce_pos]
+	# z_vel = zd1_est[bounce_pos]
 
-	print(x_vel,y_vel,z_vel)
-	print(f"velocity: {np.sqrt(x_vel**2+y_vel**2+z_vel**2):2.2f} m/s")
-	print(f"bounce_loc: {x_est[bounce_pos]:0.2f}, {y_est[bounce_pos]:0.2f},{z_est[bounce_pos]:0.2f}")
+	# print(x_vel,y_vel,z_vel)
+	# print(f"velocity: {np.sqrt(x_vel**2+y_vel**2+z_vel**2):2.2f} m/s")
+	# print(f"bounce_loc: {x_est[bounce_pos]:0.2f}, {y_est[bounce_pos]:0.2f},{z_est[bounce_pos]:0.2f}")
 
-	z_est[bounce_pos:] = None
+	# z_est[bounce_pos:] = None
 
-	print(bounce_pos)
+	# print(bounce_pos)
 
-	ax.plot3D(x_est,y_est,z_est)
-	plt.show()
+	# ax.plot3D(x_est,y_est,z_est)
+	# plt.show()

@@ -1,5 +1,16 @@
 import numpy as np
 
+## -- Shared Functions -- ##
+def print_debug(my_print):
+    if DEBUG:
+        print(my_print)
+
+def kph_2_mps(kph):
+	return kph*10/36
+
+def mps_2_kph(mps):
+	return mps*3.6
+
 def deg_2_rad(angle_deg):
 	return angle_deg*np.pi/180
 
@@ -14,7 +25,7 @@ RIGHT_CLIENT = 'right'
 ## -- Socket consts -- ##
 SOCKET_TIMEOUT = 5
 HEADER_LENGTH = 24
-IP = "192.168.20.5"		# server IP address
+IP = "192.168.20.10"		# server IP address
 PORT = 1234 
 
 CHUNK_SIZE = 4096
@@ -29,8 +40,8 @@ FRAMERATE = 90
 RESOLUTION = (640,480)
 ISO = 400
 CAM_BASELINE = 25E-2
-CAM_HEIGHT = 35E-2
-CAM_ANGLE = deg_2_rad(-10)
+CAM_HEIGHT = 42.5E-2
+CAM_ANGLE = deg_2_rad(-6)
 
 ## -- Processing consts -- ##
 N_PROCESSORS = 4
@@ -45,6 +56,27 @@ Y_COORD = 4
 LPF_THRESH = 150
 DISP_Y = 30
 SIM_THRESH = 0.1
+
+## -- Shift Token Transfer consts-- ##
+X_3D = 0
+Y_3D = 1
+Z_3D = 2
+VM = 150	# max ball velocity
+dT = 1/FRAMERATE	# inter frame time
+dM = kph_2_mps(VM)*dT 	# max dist
+C_INIT = 0
+C_CAND = 1
+MAX_EST = 3
+EXTRAPOLATE_N = 3
+TRACKLET_SCORE_THRESH = 1
+TOKEN_SIM_THRESH = dM/2
+TOKEN_SCORE_THRESH = 1
+SCORE_TOK_THRESH = 1
+thetaM = np.pi
+phiM = np.pi
+
+dT = 1/FRAMERATE	# inter frame time
+dM = kph_2_mps(VM)*dT 	# max dist
 
 ## -- LED consts -- ##
 LED_F_MAX = 60				# max LED frequency
@@ -90,7 +122,7 @@ CALIB_IMG_S = 'calib_S'
 ## -- Active calibration consts -- ##
 # ACTIVE_CALIB_F = '2020-03-27_new_img'			# directory containing L,R calib
 ACTIVE_CALIB_F = '2020-04-03_calib'
-ACTIVE_STEREO_F = '0.3071stereo_calib.npy'	# filename of stereo calib
+ACTIVE_STEREO_F = '0.4008stereo_calib.npy'	# filename of stereo calib
 
 import os
 ROOT_P = os.getcwd()
@@ -103,8 +135,3 @@ STEREO_CALIB_P = DATA_P + '//' + S_CALIB_F
 LEFT_CALIB_IMG_P = IMG_P + '//' + CALIB_IMG_L
 RIGHT_CALIB_IMG_P = IMG_P + '//' + CALIB_IMG_R
 STEREO_CALIB_IMG_P = IMG_P + '//' + CALIB_IMG_S
-
-## -- Shared Functions -- ##
-def print_debug(my_print):
-    if DEBUG:
-        print(my_print)

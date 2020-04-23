@@ -1,7 +1,3 @@
-'''
-socket tutorial (SentDex) https://www.youtube.com/watch?v=ytu2yV3Gn1I
-'''
-
 import socket
 import select
 import time
@@ -16,6 +12,7 @@ import consts as c
 import socket_funcs as sf
 # import camera_calibration as cal
 import stereo_calibration as s_cal
+import shift_token_transfer as stt
 
 import multiprocessing as mp
 import queue
@@ -135,6 +132,7 @@ def triangulate_points(stereo_calib, left_candidates, right_candidates):
     candidates_3D = len(left_candidates)*[[]]
 
     for f, frame in enumerate(left_candidates):
+        print(f"frame: {f}")
         if left_candidates[f] is None or right_candidates[f] is None:
             candidates_3D[f] = []
             continue
@@ -142,7 +140,9 @@ def triangulate_points(stereo_calib, left_candidates, right_candidates):
             candidates = []
             for i_l, c_l in enumerate(left_candidates[f]):
                 max_sim = 0
+                print(f"left: {i_l}")
                 for j_r, c_r in enumerate(right_candidates[f]):
+                    print(f"right: {j_r}")
                     if abs(c_l[c.Y_COORD]-c_r[c.Y_COORD]) < c.DISP_Y:
 
                         # calculate ratio between left and right candidate
@@ -190,7 +190,6 @@ def plot_points(points_3d):
     for f, candidates in enumerate(points_3d):
         for candidate in candidates:
             ax.scatter(xs=candidate[0],ys=candidate[1],zs=candidate[2])
-        # plt.savefig(f"{f:04d}.png")
 
     plt.show()
 
@@ -251,56 +250,6 @@ def record(stereo_calib = None, record_time = c.REC_T):
             print(f"frames captured: {min_length}")
 
             return left_candidates, right_candidates
-
-        ## -- TESTING -- ##
-        # message_list.extend(read_all_client_messages())
-        # while pos < len(message_list):
-
-        #     if message_list[pos]['data'].type == c.TYPE_BALLS:
-        #         # print(message_list[pos]['data'].message[0])
-        #         if message_list[pos]['client'] == c.LEFT_CLIENT:
-        #             left_frame = message_list[pos]['data'].message[0]
-        #             # left_balls.append(message_list[pos]['data'].message)
-        #             left_balls[left_frame] = message_list[pos]['data'].message[1]
-        #             rectify_points(left_balls[left_frame], stereo_calib.cameraMatrix1, stereo_calib.distCoeffs1, stereo_calib.R1, stereo_calib.P1)
-        #             if left_frame>left_frame_tot:
-        #                 left_frame_tot = left_frame
-
-        #         elif message_list[pos]['client'] == c.RIGHT_CLIENT:
-        #             right_frame = message_list[pos]['data'].message[0]
-        #             # right_balls.append(message_list[pos]['data'].message)
-        #             right_balls[right_frame] = message_list[pos]['data'].message[1]
-        #             rectify_points(right_balls[right_frame], stereo_calib.cameraMatrix2, stereo_calib.distCoeffs2, stereo_calib.R2, stereo_calib.P2)
-        #             if right_frame>right_frame_tot:
-        #                 right_frame_tot = right_frame
-
-
-
-
-        #     elif message_list[pos]['data'].type == c.TYPE_DONE:
-        #         if message_list[pos]['client'] == c.LEFT_CLIENT:
-        #             left_done = True
-        #         elif message_list[pos]['client'] == c.RIGHT_CLIENT:
-        #             right_done = True
-        #         if left_done and right_done:
-        #             print('recording finished')
-        #             print(f"left frames: {left_frame_tot}")
-        #             print(f"right frames: {right_frame_tot}")
-
-        #             ##################### TESTING #####################
-        #             right_balls = [x for x in right_balls if x is not None]
-        #             left_balls = [x for x in left_balls if x is not None]
-
-        #             triangulate_balls(stereo_calib, left_balls, right_balls)
-                
-        #             np.save('left_ball_candidates.npy', left_balls)
-        #             np.save('right_ball_candidates.npy', right_balls)
-        #             ###################################################
-        #             return True
-        #     else:
-        #         print(f"unknown message format for recording: {message_list[pos]['data'].type}")
-        #     pos+=1
-            ## -- TESTING -- ##
 
 def stream(run_time = c.CALIB_T, calibrate = False, display = False, timeout = False):
     message_list = []
@@ -499,7 +448,67 @@ if __name__ == "__main__":
                     if cmd < c.REC_T_MAX:
                         left_candidates, right_candidates = record(stereo_calib = stereo_calib, record_time = cmd)
                         points_3d = triangulate_points(stereo_calib, left_candidates, right_candidates)
-                        plot_points(points_3d)
+                        np.save('candidates_3D.npy', points_3d)
+                        print('analyse_tracklets')
+                        params = stt.analyse_tracklets(points_3d)
+
+                        if params is None:
+                            print('No tracklets found')
+                        else:
+                            t = np.linspace(0,cmd,1000)
+
+                            x_params = params[0]
+                            y_params = params[1]
+                            z_params = params[2]
+                            x_points = params[3]
+                            y_points = params[4]
+                            z_points = params[5]
+
+                            x_est = stt.curve_func(t,*x_params)
+                            y_est = stt.curve_func(t,*y_params)
+                            z_est = stt.curve_func(t,*z_params)
+
+                            xd1_est = stt.d1_curve_func(t,*x_params)
+                            yd1_est = stt.d1_curve_func(t,*y_params)
+                            zd1_est = stt.d1_curve_func(t,*z_params)
+
+                            z_min = 100
+                            for i, z in enumerate(z_est):
+                                if z<=0:
+                                    bounce_pos = i
+                                    break
+                                else:
+                                    if z<z_min:
+                                        z_min = z
+                                bounce_pos = z_min
+
+                            x_vel = xd1_est[bounce_pos]
+                            y_vel = yd1_est[bounce_pos]
+                            z_vel = zd1_est[bounce_pos]
+
+                            print(x_vel,y_vel,z_vel)
+                            print(f"velocity: {np.sqrt(x_vel**2+y_vel**2+z_vel**2):2.2f} m/s")
+                            print(f"bounce_loc: {x_est[bounce_pos]:0.2f}, {y_est[bounce_pos]:0.2f},{z_est[bounce_pos]:0.2f}")
+
+                            ## -- Plot points -- ##
+                            import matplotlib.pyplot as plt
+                            from mpl_toolkits.mplot3d import Axes3D
+                            fig = plt.figure()
+                            ax = fig.add_subplot(111, projection='3d')
+                            ax.set_xlabel('x (m)')
+                            ax.set_ylabel('y (m)')
+                            ax.set_zlabel('z (m)')
+                            ax.set_xlim(-11E-1/2, 11E-1/2)
+                            ax.set_ylim(0, 24E-1)
+                            ax.set_zlim(0, 3E-1)
+
+                            ax.scatter(xs=x_points,ys=y_points,zs=z_points,c=np.arange(len(x_points)), cmap='winter')
+
+                            z_est[bounce_pos:] = None
+
+                            ax.plot3D(x_est,y_est,z_est)
+                            plt.show()
+
                     else:
                         raise ValueError('invalid time entered')
                 except ValueError:
