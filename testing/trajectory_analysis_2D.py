@@ -28,15 +28,6 @@ MAX_EST = 3
 EXTRAPOLATE_N = 3
 MIN_SHARED_TOKS = 3
 
-
-# X = 0
-# Y = 1
-# Z = 2
-# Vm = 30		# min ball velocity
-# C_INIT = 0
-# CAND = 1
-
-
 def kph_2_mps(kph):
 	return kph*10/36
 
@@ -470,6 +461,7 @@ def get_tracklets(candidates):
 				init_set = False
 				c1,c2,c3 = [],[],[]
 
+	tracklet_box.prune_tracklets()
 	# tracklet_box.merge_tracklets()
 	return tracklet_box
 
