@@ -44,16 +44,11 @@ if __name__ == "__main__":
 	left_balls = np.load("left_ball_candidates.npy", allow_pickle=True)
 	right_balls = np.load("right_ball_candidates.npy", allow_pickle=True)
 
-	print(left_balls[16,1])
-	print(left_balls[17,1])
-	print(right_balls[16,1])
-	print(right_balls[17,1])
-
-	X_W = 0
-	Y_W = 1
-	W_W = 0.5
-	H_W = 0.5
-	SIZE_W = 0.75
+	# X_W = 0
+	# Y_W = 1
+	# W_W = 0.5
+	# H_W = 0.5
+	# SIZE_W = 0.75
 
 	# -- Modify both candidate lists so that frames are list indices -- #
 	left_candidates = len(left_balls)*[None]
@@ -73,7 +68,7 @@ if __name__ == "__main__":
 	rectify_points(left_candidates, s_calib.cameraMatrix1, s_calib.distCoeffs1, s_calib.R1, s_calib.P1)
 	rectify_points(right_candidates, s_calib.cameraMatrix2, s_calib.distCoeffs2, s_calib.R2, s_calib.P2)
 
-	theta = -6
+	theta = -10
 	theta = theta*np.pi/180
 
 	Rx = np.array(	[[1,		0,				0, 				0],
@@ -88,7 +83,8 @@ if __name__ == "__main__":
 
 	Rx = Rx.dot(Tz)
 
-	DISP_Y = 100
+	DISP_Y_MAX = 15
+	DISP_X_MAX = 640
 
 	for f, frame in enumerate(left_candidates):
 		print(f"frame: {f}")
@@ -101,7 +97,8 @@ if __name__ == "__main__":
 				max_sim = 0
 				for j_r, c_r in enumerate(right_candidates[f]):
 					print(j_r)
-					if abs(c_l[Y]-c_r[Y]) < DISP_Y:
+					if 		abs(c_l[Y] - c_r[Y]) < DISP_Y_MAX \
+						and abs(c_l[X] - c_r[X]) < DISP_X_MAX:
 
 						width_r = c_l[WIDTH]/c_r[WIDTH]
 						size_r = c_l[SIZE]/c_r[SIZE]

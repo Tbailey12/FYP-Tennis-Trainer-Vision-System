@@ -1,15 +1,15 @@
 import numpy as np
 import copy
 
-class Tracklet(object):
-	def __init__(self, start_frame, tracklet_box=None, tokens=[], score=0,length=0):
-		self.start_frame = start_frame
-		self.tracklet_box = tracklet_box
-		self.tokens = tokens
-		self.score = score
-		self.length = length
-		self.con_est = 0
-		self.is_valid = True
+# class Tracklet(object):
+# 	def __init__(self, start_frame, tracklet_box=None, tokens=[], score=0,length=0):
+# 		self.start_frame = start_frame
+# 		self.tracklet_box = tracklet_box
+# 		self.tokens = tokens
+# 		self.score = score
+# 		self.length = length
+# 		self.con_est = 0
+# 		self.is_valid = True
 
 def create_graph(list):
 	graph = {}
@@ -31,7 +31,7 @@ def get_start_end_nodes(graph):
 
 	return start_nodes, end_nodes
 
-def get_longest_paths(tracklets, graph, start, path=[], score=0):
+def get_longest_paths(tracklets, longest_path, graph, start, path=[], score=0):
 	if start not in path:
 		score-= tracklets[start].score
 		path.append(start)
@@ -41,7 +41,7 @@ def get_longest_paths(tracklets, graph, start, path=[], score=0):
 
 	for node in graph[start]:
 		if node not in path:
-			get_longest_paths(tracklets, graph, node, path, score)
+			get_longest_paths(tracklets, longest_path, graph, node, path, score)
 
 	del path[-1]
 
@@ -67,12 +67,23 @@ if __name__ == "__main__":
 
 	start_nodes, end_nodes = get_start_end_nodes(graph)
 	longest_path = {}
+	path_list = []
 
 	for node_s in start_nodes:
 		for node, conn in graph.items():
 			longest_path[node] = {'score':0, 'path':[]}
 
-		get_longest_paths(tracklets, graph, node_s)
+		get_longest_paths(tracklets, longest_path, graph, node_s)
 		
 		for node_e in end_nodes:
-			print(longest_path[node_e])
+			path_list.append(longest_path[node_e])
+
+	score = 0
+	best = None
+	
+	for path in path_list:
+		if path['score'] > score:
+			score=path['score']
+			best = path
+
+	print(best)

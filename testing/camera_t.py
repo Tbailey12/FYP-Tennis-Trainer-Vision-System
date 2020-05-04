@@ -6,7 +6,7 @@ import queue
 import numpy as np
 from operator import itemgetter
 
-TEST_F = 'simulation_tests'
+TEST_F = 'inside_tests_2'
 IMG_F = 'img'
 DATA_F = 'data'
 CAM_F = 'right'
@@ -26,7 +26,7 @@ w,h = RESOLUTION
 NUM_PROCESSORS = 4
 p = 0.01
 
-N_OBJECTS = 100
+N_OBJECTS = 10
 SIZE = 2
 X = 3
 Y = 4
@@ -131,8 +131,8 @@ def process_img(img_f, img_queue, active_test_dir, out_q):
 			# C = B
 			C = 255*C.astype(np.uint8)
 			C = cv2.filter2D(C, ddepth = -1, kernel=(1/16)*kernel2)
-			C[C<150] = 0
-			C[C>=150] = 255
+			C[C<174] = 0
+			C[C>=174] = 255
 
 			## -- object detection -- ##
 			n_features_cv, labels_cv, stats_cv, centroids_cv = cv2.connectedComponentsWithStats(C, connectivity=4)
@@ -206,7 +206,7 @@ if __name__ == "__main__":
 
 		# directory = test_directories[4]
 		# print(directory)
-		for directory in test_directories[:]:
+		for directory in test_directories[0:1]:
 
 			active_test_dir = str(directory)
 			process_list = []

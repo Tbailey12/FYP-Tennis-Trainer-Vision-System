@@ -3,6 +3,8 @@ import os
 import time
 import copy
 
+import graph_utils as gr
+
 ROOT_P = 'D:\\documents\\local uni\\FYP\\code'
 
 FRAME_NUM = 0
@@ -27,11 +29,12 @@ WIN_OVERLAP = 5
 MAX_EST = 3
 EXTRAPOLATE_N = 3
 MIN_SHARED_TOKS = 3
+MAX_SHARED_TOKS = 5
 
 def kph_2_mps(kph):
 	return kph*10/36
 
-dM = 100			# max dist in px
+dM = 50			# max dist in px
 thetaM = np.pi
 
 TRACKLET_SCORE_THRESH = 1
@@ -92,78 +95,84 @@ class TrackletBox(object):
 		
 
 	def merge_tracklets(self):
-		## -- Same start frame -- ##
-		for t1 in self.tracklets:
-			hiscore = t1.score
-			for t2 in self.tracklets:
-				if t1 is not t2:
-					if t1.start_frame == t2.start_frame:
-						# tracklets start at the same point
-						# remove the tracklet with the lower score
-						if t2.score > hiscore:
-							hiscore = t2.score
-							t1.is_valid = False
-						else:
-							t2.is_valid = False
-
+		graph = gr.create_graph(self.tracklets)
+	
 		# -- Temporal overlap -- ##
-		connections = [[] for x in range(len(self.tracklets))]
-		connected = []
-
 		for t1, tracklet_1 in enumerate(self.tracklets):
-			if not self.tracklets[t1].is_valid:
-				continue
-
 			for t2, tracklet_2 in enumerate(self.tracklets):
-				if self.tracklets[t1] is not self.tracklets[t2] and self.tracklets[t1].is_valid and self.tracklets[t2].is_valid:
-					# check for temporal overlap
-					first = None
-					second = None
-					if self.tracklets[t2].start_frame > self.tracklets[t1].start_frame and self.tracklets[t2].start_frame <= self.tracklets[t1].start_frame+self.tracklets[t1].length:
-						# self.tracklets[t2] starts inside self.tracklets[t1]
-						first = t1
-						second = t2
-					elif self.tracklets[t1].start_frame > self.tracklets[t2].start_frame and self.tracklets[t1].start_frame <= self.tracklets[t2].start_frame+self.tracklets[t2].length:
-						# self.tracklets[t1] starts inside self.tracklets[t2]
-						first = t2
-						second = t1
+				if t1 == t2:
+					continue
+				if tracklet_2.start_frame < tracklet_1.start_frame:
+					continue
 
-					if first is not None and second is not None:
-						print(f"first_s: {self.tracklets[first].start_frame}, {self.tracklets[first].start_frame+self.tracklets[first].length}")
-						print(f"second_s: {self.tracklets[second].start_frame}, {self.tracklets[second].start_frame+self.tracklets[second].length}")
-						# if temporal overlap
-						contained = None
-						if self.tracklets[second].start_frame+self.tracklets[second].length < self.tracklets[first].start_frame+self.tracklets[first].length:
-							contained = True
+				cons_count_max = 0
+				cons_pos_max = None
+				for token1 in reversed(self.tracklets[t1].tokens[-MAX_SHARED_TOKS:]):
+					cons_count = 0
+					cons_pos = 0
+					cons = False
+					for token2 in self.tracklets[t2].tokens[:MAX_SHARED_TOKS]:
+						if token1.f == token2.f:
+							sim = token1.calc_similarity(token2)
 						else:
-							contained = False
-						# check spatial overlap
-						if contained:
-							pass
+							continue
+
+						if sim < TOKEN_SIM_THRESH:
+							cons = True
+							cons_count += 1
+							cons_pos = self.tracklets[t2].tokens.index(token2)
 						else:
-							shared_tracklets = []
-							for token1 in reversed(self.tracklets[first].tokens):
-								cons = False
-								cons_count = 0
+							break
 
-								for token2 in self.tracklets[second].tokens:
-									sim = token1.calc_similarity(token2)
+					if cons == True and cons_count > cons_count_max:
+						cons_pos_max = cons_pos
 
-									if sim < TOKEN_SIM_THRESH:
-										cons = True
-										cons_count += 1
-										t1_index = self.tracklets[first].tokens.index(token1)
-										t2_index = self.tracklets[second].tokens.index(token2)
-									else:
-										if cons is True:
-											shared_tracklets.append([t1_index, t2_index, cons_count])
-											break
-							# find the track with the most shared tokens
-							if shared_tracklets != []:
-								shared_track = sorted(shared_tracklets, key=lambda x: x[2], reverse=True)[0]
-								if shared_track[2] >= MIN_SHARED_TOKS:
-									connections[t1] = [t1,t2,shared_track[0],shared_track[1]]
-									connected.append(t2)
+				if cons_pos_max is not None:
+					graph[t1].append(t2)
+					for t, tok in enumerate(self.tracklets[t2].tokens):
+						if t<=cons_pos_max:
+							self.tracklets[t2].score -= self.tracklets[t2].tokens[t].score
+							self.tracklets[t2].tokens[t].score = 0
+
+		start_nodes, end_nodes = gr.get_start_end_nodes(graph)
+
+		for item in graph.items():
+			print(item)
+
+		longest_path = {}
+		path_list = []
+		for node_s in start_nodes:
+			for node, conn in graph.items():
+				longest_path[node] = {'score':0, 'path':[]}
+
+			gr.get_longest_paths(self.tracklets, longest_path, graph, node_s)
+			
+			for node_e in end_nodes:
+				path_list.append(longest_path[node_e])
+
+		score = 0
+		best_path = None
+		for path in path_list:
+			if path['score'] > score:
+				score=path['score']
+				best_path = path
+
+		if best_path is not None:
+			merged_track = Tracklet(start_frame=self.tracklets[best_path['path'][0]].start_frame)
+			f=-1
+			for t in best_path['path']:
+				for tok in self.tracklets[t].tokens:
+					if tok.f > f:
+						merged_track.add_token(tok)
+						f = tok.f
+
+			for tracklet in self.tracklets:
+				tracklet.is_valid = False
+
+			self.add_tracklet(merged_track)
+
+		# print(graph)
+		# print(end_nodes)
 
 		# for con_i, con in enumerate(connections):
 		# 	# if the tracklet is an initial tracklet, not joined to another.
@@ -370,7 +379,11 @@ def evaluate(candidates, tracklet, f, f_max):
 				score = score_node(est, c4)
 				if score > TOKEN_SCORE_THRESH:
 					valid_cand = True
-					tracklet.add_token(Token(f, c4, score))
+					if f_max-WIN_SIZE <= f:
+						tracklet.add_token(Token(f, c4, score))
+					else:
+						tracklet.add_token(Token(f, c4, 0))
+
 					evaluate(candidates, tracklet, f+1, f_max)
 					tracklet.del_token()
 
@@ -440,19 +453,21 @@ def get_tracklets(candidates):
 				tracklet = Tracklet(cur_frame-3, tracklet_box)
 				for c1_c in c1:
 					if c1_c[CAND_INIT] is True:	continue
-					tracklet.add_token(Token(cur_frame-3, c1_c[CAND_DATA], score=1))
+					tracklet.add_token(Token(cur_frame-3, c1_c[CAND_DATA], score=0))
 					for c2_c in c2:
 						if c2_c[CAND_INIT] is True:	continue
-						tracklet.add_token(Token(cur_frame-2, c2_c[CAND_DATA], score=1))
+						tracklet.add_token(Token(cur_frame-2, c2_c[CAND_DATA], score=0))
 						for c3_c in c3:
 							if c3_c[CAND_INIT] is True:	continue
-							tracklet.add_token(Token(cur_frame-1, c3_c[CAND_DATA], score=1))
+							tracklet.add_token(Token(cur_frame-1, c3_c[CAND_DATA], score=0))
 
-							c1_c[CAND_INIT] = True
-							c2_c[CAND_INIT] = True
-							c3_c[CAND_INIT] = True
+							if check_init_toks(c1_c[CAND_DATA][CAND_X:], c2_c[CAND_DATA][CAND_X:], c3_c[CAND_DATA][CAND_X:]):
 
-							evaluate(candidates, tracklet, cur_frame, win_end)
+								c1_c[CAND_INIT] = True
+								c2_c[CAND_INIT] = True
+								c3_c[CAND_INIT] = True
+
+								evaluate(candidates, tracklet, cur_frame, win_end)
 
 							tracklet.del_token()
 						tracklet.del_token()
@@ -461,8 +476,6 @@ def get_tracklets(candidates):
 				init_set = False
 				c1,c2,c3 = [],[],[]
 
-	tracklet_box.prune_tracklets()
-	# tracklet_box.merge_tracklets()
 	return tracklet_box
 
 def find_best_tracklet(tracklet_box):
@@ -487,7 +500,7 @@ if __name__ == "__main__":
 	RESOLUTION = (640,480)
 	w,h = RESOLUTION
 
-	os.chdir(ROOT_P + '\\' + 'img\\simulation_tests')
+	os.chdir(ROOT_P + '\\' + 'img\\inside_tests_2')
 
 	left_candidates_l = np.load('left_ball_candidates.npy', allow_pickle=True)
 	right_candidates_l = np.load('right_ball_candidates.npy', allow_pickle=True)
@@ -539,7 +552,10 @@ if __name__ == "__main__":
 
 	# plt.show()
 
+	# quit()
+
 	left_tracklets = get_tracklets(left_candidates)
+	left_tracklets.merge_tracklets()
 
 	for t in left_tracklets.tracklets:
 		if t.is_valid:
