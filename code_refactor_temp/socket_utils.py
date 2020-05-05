@@ -84,10 +84,26 @@ def send_message(client_socket, message, caller):
 			if chunk_sent == 0:
 				raise RuntimeError("Socket connection broken")
 
-		return True
+		return True	# message sent successfully
+
+	except ConnectionResetError as e:
+		# close the client if the server disconnects
+		if caller == c.CLIENT_NAME:
+			raise CommError("Error: Server disconnected") from e
+		elif caller == c.SERVER_NAME:
+			return None
 
 	except IOError as e:
-		pass
+		# when there is too many bytes for socket send buffer
+		if e.errno != errno.EAGAIN and e.errno != errno.EWOULDBLOCK:
+			print(f"Send Error: {str(e)}")
+			if caller == c.CLIENT_NAME:  # close the client if the server has disconnected
+				raise CommError("Error: Server disconnected") from e
+			elif caller == c.SERVER_NAME:  # return None if the client has disconnected
+				return None
+		print(e)
+		return None  # if there are no more messages and no errors
 
 	except Exception as e:
-		pass
+		print("Send Error", e)
+		raise CommError("Send Error") from e
