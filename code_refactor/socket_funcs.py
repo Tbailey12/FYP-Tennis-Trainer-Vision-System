@@ -6,21 +6,10 @@ import sys
 
 import consts as c
 
-debug = c.DEBUG
-
 class MyMessage(object):
 	def __init__(self, my_type, message):
 		self.type = my_type
 		self.message = message
-
-# class CalMessage(object):
-# 	def __init__(self, num_img=c.CALIB_NUM_IMG, img_delay=c.CALIB_IMG_DELAY):
-# 		self.num_img = num_img
-# 		self.img_delay = img_delay
-
-def print_debug(my_print):
-	if debug:
-		print(my_print)
 
 class Error(Exception):
 	pass
@@ -51,13 +40,14 @@ def send_message(socket, message_data, caller):
 			if sent == 0:
 				raise RuntimeError("Socket connection broken")
 			total_sent = total_sent + sent
-		# socket.sendall(message)
+
 	except ConnectionResetError as e:
 		if caller == c.CLIENT:  # close the client if the server has disconnected
 			raise CommError("Error: Server disconnected") from e
 		elif caller == c.SERVER:  # return None if the client has disconnected
 			return None
 		return None
+
 	except IOError as e:
 		# when there is too many byes for socket send buffer
 		if e.errno != errno.EAGAIN and e.errno != errno.EWOULDBLOCK:
@@ -68,6 +58,7 @@ def send_message(socket, message_data, caller):
 				return None
 		print(e)
 		return None  # if there are no more messages and no errors
+
 	except Exception as e:  # could not send message for some reason
 		print("Send Error", e)
 		raise CommError("Send Error") from e
@@ -103,11 +94,11 @@ def receive_message(client_socket, caller):
 	except IOError as e:
 		# errors when there are no more messages to be received
 		if e.errno != errno.EAGAIN and e.errno != errno.EWOULDBLOCK:
-			print_debug(f"Read Error:{str(e)}")
+			c.print_debug(f"Read Error:{str(e)}")
 			if caller == c.CLIENT:  # close the client if the server has disconnected
 				raise CommError("Error: Server disconnected") from e
 			elif caller == c.SERVER:  # return None if the client has disconnected
-				return None
+				raise CommError("Error: Client disconnected")
 		return None  # if there are no more messages and no errors
 	except ConnectionResetError as e:
 		if caller == c.CLIENT:  # close the client if the server has disconnected
@@ -115,6 +106,8 @@ def receive_message(client_socket, caller):
 			raise CommError("Recv Error: Server disconnected") from e
 		elif caller == c.SERVER:  # return None if the client has disconnected
 			return None
+	except CommError as e:
+		raise CommError("Connection closed unexpectedly")
 	except Exception as e:
 		print("Recv Error", e)  # could not receive message for some reason
 		raise CommError("Recv Error") from e

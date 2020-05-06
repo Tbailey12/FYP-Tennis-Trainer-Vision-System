@@ -10,9 +10,8 @@ import cv2
 
 import consts as c
 import socket_funcs as sf
-# import camera_calibration as cal
+
 import stereo_calibration as s_cal
-import shift_token_transfer as stt
 
 import multiprocessing as mp
 import queue
@@ -28,50 +27,6 @@ def send_to_client(client_name, message):
             if clients[client_socket]['data'] == client_name:
                 c.print_debug(f"Sending message to {client_name} client: Time: {message}")
                 sf.send_message(client_socket, message, c.SERVER)
-
-def read_all_client_messages():
-    message_list = []
-    # syntax for select.select()
-    # (sockets we read, sockets we write, sockets that error)
-    read_sockets, _, exception_sockets = select.select(sockets_list, [], sockets_list, 0)
-    # read all messages from clients
-    while read_sockets:
-        # if any of the read_sockets have new data
-        for notified_socket in read_sockets:
-            # new client connected
-            if notified_socket == server_socket:  # client has connected, so accept and handle connection
-                client_socket, client_address = server_socket.accept()
-
-                client = sf.receive_message(client_socket, c.SERVER)
-                if client is None:  # client disconnected while sending
-                    continue
-                sockets_list.append(client_socket)  # append new socket to list of client sockets
-                clients[client_socket] = client
-                print(
-                    f"Accepted new connection from {client_address[0]}:{client_address[1]}, client:{client['data']}")
-            # existing client connected
-            else:
-                message = sf.receive_message(notified_socket, c.SERVER)
-
-                if message is None:
-                    print(f"Closed connection from {clients[notified_socket]['data']}")
-                    sockets_list.remove(notified_socket)
-                    del clients[notified_socket]
-                    continue
-
-                client = clients[notified_socket]
-                c.print_debug(f"Received message from {client['data']}: {message['data']}")
-                message_list.append({"client": client['data'], "data": message['data']})
-
-        # if there is an exception, remove the socket from the list
-        for notified_socket in exception_sockets:
-            sockets_list.remove(notified_socket)
-            del clients[notified_socket]
-
-        # if there are more messages to be read, read them
-        # read_sockets, _, exception_sockets = select.select(sockets_list, [], sockets_list, 0)
-        return message_list
-    return []
 
 def search_for_chessboards(chessboards_found, chessboards, left_frame, right_frame):
     left_chessboard = s_cal.find_chessboards(left_frame)
@@ -90,25 +45,6 @@ def server_help():
     calibrate - calibrates the stereo cameras using 10 images
     '''
     return helpstring
-
-def initialise():
-    message_list = []
-    left_connected = False
-    right_connected = False
-
-    while True:
-        time.sleep(1/1000)
-        message_list.extend(read_all_client_messages())
-        for client_socket in sockets_list:
-            if client_socket != server_socket:  # if the socket is not the server socket
-                if clients[client_socket]['data'] == c.LEFT_CLIENT:
-                    left_connected = True
-                elif clients[client_socket]['data'] == c.RIGHT_CLIENT:
-                    right_connected = True
-
-        if left_connected and right_connected:
-            print('both clients connected')
-            return True
 
 def rectify_points(frame, camera_matrix, dist_coeffs, R_matrix, P_matrix):
     for candidate in frame:
@@ -385,137 +321,230 @@ def shutdown():
         time.sleep(2)
         sys.exit()
 
+def add_new_client(server_socket):
+    '''
+    Adds a new client to the clients dict and adds the corresponding socket to sockets list
+    Return: True if new client
+            False if no new client
+    '''
+    client_socket, client_address = server_socket.accept()
+    try:
+        client = sf.receive_message(client_socket, c.SERVER)
+        if client is not None:
+            sockets_list.append(client_socket)
+            clients[client_socket] = client
+            print(f"Accepted connection from client: {client['data']} on {client_address[0]}:{client_address[1]}")
+            return True
+        else:
+            return False
+
+    except socket_utils.CommError as e:
+        print(e.message)
+        return False
+
+def read_client_messages(read_all=False):
+    message_list = []
+    read_sockets, _, exception_sockets = select.select(sockets_list, [], sockets_list, 0)
+
+    while read_sockets:
+        for notified_socket in read_sockets:
+            # new client connected
+            if notified_socket == server_socket:  # client has connected, so accept and handle connection
+                add_new_client(server_socket)
+            # existing client connected
+            else:
+                message = sf.receive_message(notified_socket, c.SERVER)
+
+                if message is None:
+                    print(f"Closed connection from {clients[notified_socket]['data']}")
+                    sockets_list.remove(notified_socket)
+                    del clients[notified_socket]
+                    continue
+
+                client = clients[notified_socket]
+                c.print_debug(f"Received message from {client['data']}: {message['data']}")
+                message_list.append({"client": client['data'], "data": message['data']})
+
+        # if there is an exception, remove the socket from the list
+        for notified_socket in exception_sockets:
+            sockets_list.remove(notified_socket)
+            del clients[notified_socket]
+
+        if read_all:
+            read_sockets, _, exception_sockets = select.select(sockets_list, [], sockets_list, 0)
+            continue
+        else:
+            break
+
+    return message_list
+
+def initialise_server():
+    '''
+    Waits for both left and right client to be connected to the server
+    '''
+    while True:
+        read_client_messages()
+
+        if len(clients) >= 2:
+            left_connected, right_connected = False, False
+
+            for client_socket in clients:
+                print(clients[client_socket]['data'])
+                left_connected = True if clients[client_socket]['data'] == c.LEFT_CLIENT else left_connected
+                right_connected = True if clients[client_socket]['data'] == c.RIGHT_CLIENT else right_connected
+
+            if left_connected and right_connected:
+                print('both clients connected')
+                return True
+
+        time.sleep(0.01)
+
 server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)  # create IPV4 socket for server
 server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)  # allows us to reconnect to same port
 
-server_socket.bind((c.IP, c.PORT))
+server_socket.bind((c.SERVER_IP, c.PORT))
 server_socket.listen()
 
 sockets_list = [server_socket]  # list of sockets, init with server socket
-clients = {}  # list of clients
-
-j = 0
-
+clients = {}  # dict of key:socket, value:client_name
 
 if __name__ == "__main__":
     print("Server started")
+    initialise_server()
 
-    initialise()
-    time.sleep(3)
-    print('initialised')
-    stereo_calib = s_cal.load_stereo_calib()
-    
     while True:
-        time.sleep(1/1000)
+        try:
+            message_list = read_client_messages(read_all=True)
 
-        cmd = input("Enter server cmd: ")
-        if cmd == "help":
-            print(server_help())
-        if cmd == "calibrate":
-            while True:
-                cmd = input("Load existing calibration? (y/n)")
-                if cmd == "y":
-                    stereo_calib = s_cal.load_stereo_calib()
-                    break
-                elif cmd == "n":
-                    cal_result = stream(run_time=60, calibrate=True, display=True, timeout=True)
-                    if cal_result:
-                        stereo_calib = cal_result
-                    break
-                else:
-                    print(f"{cmd} is not a valid cmd, please try again")
+            for message in message_list:
+                print(message['data'].message)
 
-        elif cmd == "stream":
-            while True:
-                try: 
-                    cmd = int(input("stream time: "))
-                except ValueError:
-                    print("Invalid type, please enter an integer for time")
-                    continue
-                if cmd <= c.STREAM_MAX:
-                    stream(run_time=cmd, calibrate=False, display=True, timeout=True)
-                    break
-                else:
-                    print(f"Please enter a time less than {c.STREAM_MAX}")
+            for i in range(4):
+                for client in clients:
+                    message = sf.MyMessage(c.TYPE_STR, f"Hi {clients[client]['data']} client {time.time()}")
+                    sf.send_message(client, message, c.SERVER)
 
-        elif cmd == "record":
-            if stereo_calib.rms is None:
-                print("calibration must be conducted before recording")
-            else:
-                cmd = input("Recording time: ")
-                try:
-                    cmd = int(cmd)
-                    if cmd < c.REC_T_MAX:
-                        left_candidates, right_candidates = record(stereo_calib = stereo_calib, record_time = cmd)
-                        points_3d = triangulate_points(stereo_calib, left_candidates, right_candidates)
-                        np.save('candidates_3D.npy', points_3d)
-                        print('analyse_tracklets')
-                        params = stt.analyse_tracklets(points_3d)
+            time.sleep(1)
 
-                        if params is None:
-                            print('No tracklets found')
-                        else:
-                            t = np.linspace(0,cmd,1000)
+        except sf.CommError as e:
+            print("Connection to client closed unexpectedly, shutting down...")
+            quit()
 
-                            x_params = params[0]
-                            y_params = params[1]
-                            z_params = params[2]
-                            x_points = params[3]
-                            y_points = params[4]
-                            z_points = params[5]
+    # time.sleep(3)
+    # print('initialised')
+    # stereo_calib = s_cal.load_stereo_calib()
+    
+    # while True:
+    #     time.sleep(1/1000)
 
-                            x_est = stt.curve_func(t,*x_params)
-                            y_est = stt.curve_func(t,*y_params)
-                            z_est = stt.curve_func(t,*z_params)
+    #     cmd = input("Enter server cmd: ")
+    #     if cmd == "help":
+    #         print(server_help())
+    #     if cmd == "calibrate":
+    #         while True:
+    #             cmd = input("Load existing calibration? (y/n)")
+    #             if cmd == "y":
+    #                 stereo_calib = s_cal.load_stereo_calib()
+    #                 break
+    #             elif cmd == "n":
+    #                 cal_result = stream(run_time=60, calibrate=True, display=True, timeout=True)
+    #                 if cal_result:
+    #                     stereo_calib = cal_result
+    #                 break
+    #             else:
+    #                 print(f"{cmd} is not a valid cmd, please try again")
 
-                            xd1_est = stt.d1_curve_func(t,*x_params)
-                            yd1_est = stt.d1_curve_func(t,*y_params)
-                            zd1_est = stt.d1_curve_func(t,*z_params)
+    #     elif cmd == "stream":
+    #         while True:
+    #             try: 
+    #                 cmd = int(input("stream time: "))
+    #             except ValueError:
+    #                 print("Invalid type, please enter an integer for time")
+    #                 continue
+    #             if cmd <= c.STREAM_MAX:
+    #                 stream(run_time=cmd, calibrate=False, display=True, timeout=True)
+    #                 break
+    #             else:
+    #                 print(f"Please enter a time less than {c.STREAM_MAX}")
 
-                            z_min = 100
-                            for i, z in enumerate(z_est):
-                                if z<=0:
-                                    bounce_pos = i
-                                    break
-                                else:
-                                    if z<z_min:
-                                        z_min = z
-                                bounce_pos = z_min
+    #     elif cmd == "record":
+    #         if stereo_calib.rms is None:
+    #             print("calibration must be conducted before recording")
+    #         else:
+    #             cmd = input("Recording time: ")
+    #             try:
+    #                 cmd = int(cmd)
+    #                 if cmd < c.REC_T_MAX:
+    #                     left_candidates, right_candidates = record(stereo_calib = stereo_calib, record_time = cmd)
+    #                     points_3d = triangulate_points(stereo_calib, left_candidates, right_candidates)
+    #                     np.save('candidates_3D.npy', points_3d)
+    #                     print('analyse_tracklets')
+    #                     params = stt.analyse_tracklets(points_3d)
 
-                            x_vel = xd1_est[bounce_pos]
-                            y_vel = yd1_est[bounce_pos]
-                            z_vel = zd1_est[bounce_pos]
+    #                     if params is None:
+    #                         print('No tracklets found')
+    #                     else:
+    #                         t = np.linspace(0,cmd,1000)
 
-                            print(x_vel,y_vel,z_vel)
-                            print(f"velocity: {np.sqrt(x_vel**2+y_vel**2+z_vel**2):2.2f} m/s")
-                            print(f"bounce_loc: {x_est[bounce_pos]:0.2f}, {y_est[bounce_pos]:0.2f},{z_est[bounce_pos]:0.2f}")
+    #                         x_params = params[0]
+    #                         y_params = params[1]
+    #                         z_params = params[2]
+    #                         x_points = params[3]
+    #                         y_points = params[4]
+    #                         z_points = params[5]
 
-                            ## -- Plot points -- ##
-                            import matplotlib.pyplot as plt
-                            from mpl_toolkits.mplot3d import Axes3D
-                            fig = plt.figure()
-                            ax = fig.add_subplot(111, projection='3d')
-                            ax.set_xlabel('x (m)')
-                            ax.set_ylabel('y (m)')
-                            ax.set_zlabel('z (m)')
-                            ax.set_xlim(-11E-1/2, 11E-1/2)
-                            ax.set_ylim(0, 24E-1)
-                            ax.set_zlim(0, 3E-1)
+    #                         x_est = stt.curve_func(t,*x_params)
+    #                         y_est = stt.curve_func(t,*y_params)
+    #                         z_est = stt.curve_func(t,*z_params)
 
-                            ax.scatter(xs=x_points,ys=y_points,zs=z_points,c=np.arange(len(x_points)), cmap='winter')
+    #                         xd1_est = stt.d1_curve_func(t,*x_params)
+    #                         yd1_est = stt.d1_curve_func(t,*y_params)
+    #                         zd1_est = stt.d1_curve_func(t,*z_params)
 
-                            z_est[bounce_pos:] = None
+    #                         z_min = 100
+    #                         for i, z in enumerate(z_est):
+    #                             if z<=0:
+    #                                 bounce_pos = i
+    #                                 break
+    #                             else:
+    #                                 if z<z_min:
+    #                                     z_min = z
+    #                             bounce_pos = z_min
 
-                            ax.plot3D(x_est,y_est,z_est)
-                            plt.show()
+    #                         x_vel = xd1_est[bounce_pos]
+    #                         y_vel = yd1_est[bounce_pos]
+    #                         z_vel = zd1_est[bounce_pos]
 
-                    else:
-                        raise ValueError('invalid time entered')
-                except ValueError:
-                    print(f"Invalid recording time, please enter time in s less than {c.REC_T_MAX}")
+    #                         print(x_vel,y_vel,z_vel)
+    #                         print(f"velocity: {np.sqrt(x_vel**2+y_vel**2+z_vel**2):2.2f} m/s")
+    #                         print(f"bounce_loc: {x_est[bounce_pos]:0.2f}, {y_est[bounce_pos]:0.2f},{z_est[bounce_pos]:0.2f}")
 
-        elif cmd == "shutdown":
-            shutdown()
-        else:
-            print(f"{cmd} is not a valid command, enter 'help' to see command list")
-        continue
+    #                         ## -- Plot points -- ##
+    #                         import matplotlib.pyplot as plt
+    #                         from mpl_toolkits.mplot3d import Axes3D
+    #                         fig = plt.figure()
+    #                         ax = fig.add_subplot(111, projection='3d')
+    #                         ax.set_xlabel('x (m)')
+    #                         ax.set_ylabel('y (m)')
+    #                         ax.set_zlabel('z (m)')
+    #                         ax.set_xlim(-11E-1/2, 11E-1/2)
+    #                         ax.set_ylim(0, 24E-1)
+    #                         ax.set_zlim(0, 3E-1)
+
+    #                         ax.scatter(xs=x_points,ys=y_points,zs=z_points,c=np.arange(len(x_points)), cmap='winter')
+
+    #                         z_est[bounce_pos:] = None
+
+    #                         ax.plot3D(x_est,y_est,z_est)
+    #                         plt.show()
+
+    #                 else:
+    #                     raise ValueError('invalid time entered')
+    #             except ValueError:
+    #                 print(f"Invalid recording time, please enter time in s less than {c.REC_T_MAX}")
+
+    #     elif cmd == "shutdown":
+    #         shutdown()
+    #     else:
+    #         print(f"{cmd} is not a valid command, enter 'help' to see command list")
+    #     continue
