@@ -46,6 +46,7 @@ TYPE_CAP = "cap"
 TYPE_IMG = "img"
 TYPE_BALLS = "balls"
 TYPE_DONE = "done"
+TYPE_START_CAM = "start_cam"
 TYPE_SHUTDOWN = "shutdown"
 TYPE_STREAM = "stream"
 

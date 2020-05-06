@@ -1,32 +1,37 @@
 import socket
 import select
 import time
-import sys
-from datetime import datetime
-import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
-
+import os
+import queue
 import cv2
+import multiprocessing as mp
+import numpy as np
+# import matplotlib.pyplot as plt
+# from mpl_toolkits.mplot3d import Axes3D
 
 import consts as c
 import socket_funcs as sf
-
 import stereo_calibration as s_cal
 
-import multiprocessing as mp
-import queue
-
-import numpy as np
-import os
-import timeit
-
 def send_to_client(client_name, message):
-    for client_socket in sockets_list:
-        if client_socket != server_socket:  # if the socket is not the server socket
-            # send left message
-            if clients[client_socket]['data'] == client_name:
-                c.print_debug(f"Sending message to {client_name} client: Time: {message}")
-                sf.send_message(client_socket, message, c.SERVER)
+    '''
+    Send message to the client specified by client_name
+
+    Return: True if sent, False if error
+    '''
+    try:
+        for client_socket in sockets_list:
+            if client_socket != server_socket:  # if the socket is not the server socket
+                # send left message
+                if clients[client_socket]['data'] == client_name:
+                    c.print_debug(f"Sending message to {client_name} client: Time: {message}")
+                    sf.send_message(client_socket, message, c.SERVER)
+        return True
+
+    except sf.CommError as e:
+        raise sf.CommError(e)
+        return False
+
 
 def search_for_chessboards(chessboards_found, chessboards, left_frame, right_frame):
     left_chessboard = s_cal.find_chessboards(left_frame)
@@ -343,6 +348,13 @@ def add_new_client(server_socket):
         return False
 
 def read_client_messages(read_all=False):
+    '''
+    Read messages from all connected clients
+    read_all=False (default) - One message at a time
+    read_all=True - Read all messages at once
+
+    Return list of messages [{header: message_header, data: message_data}]
+    '''
     message_list = []
     read_sockets, _, exception_sockets = select.select(sockets_list, [], sockets_list, 0)
 
@@ -381,6 +393,8 @@ def read_client_messages(read_all=False):
 def initialise_server():
     '''
     Waits for both left and right client to be connected to the server
+
+    Return: True if initialised, False if not
     '''
     while True:
         read_client_messages()
@@ -398,6 +412,22 @@ def initialise_server():
                 return True
 
         time.sleep(0.01)
+    return False
+
+def initialise_picamera():
+    '''
+    Sends message to both clients to start the picameras
+    Waits for confirmation of camera startup
+
+    Return: True if cameras started
+    False: Cameras not started
+    '''
+    message = sf.MyMessage(c.TYPE_START_CAM, ())
+    for client_name in client_names:
+        send_to_client(client_name, message)
+
+    while True:
+        time.sleep(1)
 
 server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)  # create IPV4 socket for server
 server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)  # allows us to reconnect to same port
@@ -407,10 +437,12 @@ server_socket.listen()
 
 sockets_list = [server_socket]  # list of sockets, init with server socket
 clients = {}  # dict of key:socket, value:client_name
+client_names = [c.LEFT_CLIENT, c.RIGHT_CLIENT]
 
 if __name__ == "__main__":
     print("Server started")
     initialise_server()
+    initialise_picamera()
 
     while True:
         try:
@@ -419,10 +451,6 @@ if __name__ == "__main__":
             for message in message_list:
                 print(message['data'].message)
 
-            for i in range(4):
-                for client in clients:
-                    message = sf.MyMessage(c.TYPE_STR, f"Hi {clients[client]['data']} client {time.time()}")
-                    sf.send_message(client, message, c.SERVER)
 
             time.sleep(1)
 
