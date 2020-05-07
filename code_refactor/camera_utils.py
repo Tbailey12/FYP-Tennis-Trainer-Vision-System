@@ -44,6 +44,7 @@ def image_processor(frame_queues, event_manager, process_complete):
                 return
 
             n_frame, n_frame_2, frame_buf = frame_queues.unprocessed_frames.get_nowait()
+            print(n_frame, n_frame_2)
 
             # y_data is a numpy array h x w with 8 bit greyscale brightness values
             y_data = np.frombuffer(frame_buf, dtype=np.uint8, count=c.FRAME_HEIGHT*c.FRAME_WIDTH).reshape(c.FRAME_SIZE).astype(np.float32)
@@ -122,6 +123,7 @@ def image_processor(frame_queues, event_manager, process_complete):
         except queue.Empty:
                 if not event_manager.recording.is_set() and frame_queues.unprocessed_frames.qsize() == 0:  # if the recording has finished
                     process_complete.set()
+                    time.sleep(0.5)
                     # ######### FOR TESTING ##############
                     # if total_frames>0:
                     #     print((total_time/total_frames)/1E6)
@@ -154,22 +156,22 @@ class EventManager(object):
         self.shutdown = mp.Event()
         
 class FrameController(object):
-    def __init__(self, frame_queues, event_manager):
+    def __init__(self, frame_queues, event_manager, processing_complete_list):
         self.frame_queues = frame_queues
         self.event_manager = event_manager
+        self.processing_complete_list = processing_complete_list
 
         self.processor_list = []
-        self.processor_complete_list = []
         self.n_frame_record = 0
         self.n_frame_idle = 0
 
         # create processors for processing the individual video frames
-        for i in range(c.N_PROCESSORS):
-            proccess_complete = mp.Event()
-            processor = mp.Process(target=image_processor, args=(self.frame_queues, self.event_manager, proccess_complete))
-            self.processor_complete_list.append(proccess_complete)
-            self.processor_list.append(processor)
-            processor.start()
+        # for i in range(c.N_PROCESSORS):
+        #     proccess_complete = mp.Event()
+        #     processor = mp.Process(target=image_processor, args=(self.frame_queues, self.event_manager, proccess_complete))
+        #     self.processing_complete_list.append(proccess_complete)
+        #     self.processor_list.append(processor)
+        #     processor.start()
 
     def write(self, buf):
         '''
@@ -177,8 +179,8 @@ class FrameController(object):
         n_frame_record keeps track of the frame number since recording
         n_frame_idle keep track of the frame number since camera initialisation
         '''
-        self.frame_queues.unprocessed_frames.put((self.n_frame_record, self.n_frame_idle, buf))    # add the new frame to the queue
-        
+        # self.frame_queues.unprocessed_frames.put((self.n_frame_record, self.n_frame_idle, buf))    # add the new frame to the queue
+        print(self.n_frame_record, self.n_frame_idle)
         if self.event_manager.recording.is_set() or self.event_manager.record_stream.is_set():
             self.n_frame_record += 1
             self.n_frame_idle += 1
@@ -186,14 +188,12 @@ class FrameController(object):
             self.n_frame_record = -1
             self.n_frame_idle += 1
 
-        return True
-
     def flush(self):
         '''
         At end of the recording, wait for all processes to complete
         '''
         for i, processor in enumerate(self.processor_list):
-            self.processor_complete_list[i].wait()
+            self.processing_complete_list[i].wait()
             processor.terminate()
             processor.join()
         print('shutdown (picam)')
@@ -210,6 +210,9 @@ class CameraManager(object):
     def __init__(self):
         self.frame_queues = FrameQueues()
         self.event_manager = EventManager()
+
+        self.processing_complete_list = []
+        self.shutdown = mp.Event()
 
     def set_params(self, camera):
         '''
@@ -242,24 +245,24 @@ class CameraManager(object):
         '''
         # Picam will stay in this while loop waiting for either shutdown or recording flags to be set
         while True:
-            if event_manager.event_change.wait():
-                if event_manager.recording.is_set():
-                    try:
-                        for proc in proc_complete:  # reset all processing complete events
-                            proc.clear()
-                        camera.wait_recording(t_record.value) # record for an amount of time
-                    finally:
-                        event_manager.recording.clear()
-                        for proc in proc_complete:  # wait for all processing to be complete
-                            proc.wait()
-                        processing_complete.set()   # set processing complete event
+            if self.event_manager.recording.is_set():
+                try:
+                    for process in self.processing_complete_list:  # reset all processing complete events
+                        process.clear()
+                    camera.wait_recording(2) # record for an amount of time
+                finally:
+                    self.event_manager.recording.clear()
+                    for process in self.processing_complete_list:  # wait for all processing to be complete
+                        process.wait()
+                    self.event_manager.processing_complete.set()   # set processing complete event
 
-                elif event_manager.record_stream.is_set():
-                    processing_complete.wait()
+            elif self.event_manager.record_stream.is_set():
+                self.event_manager.processing_complete.wait()
 
-                elif event_manager.shutdown.is_set():
-                    break
+            elif self.event_manager.shutdown.is_set():
+                break
         camera.stop_recording()
+        return True
 
     def start_camera(self):
         '''
@@ -267,17 +270,14 @@ class CameraManager(object):
 
         Return: True
         '''
-        proc_complete = []
-        camera = picamera.PiCamera()
-        self.set_params(camera)
-        output = FrameController(self.frame_queues, self.event_manager)
-        camera.start_recording(output, format='yuv')
-        self.event_manager.picam_ready.set()
-        # self.manage_recording(camera)
+        with picamera.PiCamera() as camera:
+            self.set_params(camera)
+            output = FrameController(self.frame_queues, self.event_manager, self.processing_complete_list)
+            camera.start_recording(output, format='yuv')
+            self.event_manager.picam_ready.set()
+            self.manage_recording(camera)
 
-        return camera
-
-
+        self.shutdown.set()
 
 # ## -- imports -- ##
 # import io

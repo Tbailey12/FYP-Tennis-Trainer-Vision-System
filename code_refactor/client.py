@@ -5,10 +5,11 @@ import sys
 import time
 import traceback
 from inspect import signature
+import multiprocessing as mp
 
 import consts as c
 import socket_funcs as sf
-import camera as cam
+import camera_utils
 import l_r_consts
 
 class Client(object):
@@ -18,6 +19,7 @@ class Client(object):
         self.socket = self.create_client_socket()
         self.connect_to_server()
         self.camera_manager = None
+        self.camera_process = None
 
         self.cmd_parser = {
             c.TYPE_START_CAM: self.initialise_picamera,
@@ -27,6 +29,7 @@ class Client(object):
         # attempt to connect to the server, if connection refused, wait 1s then try again
         while True:
             try:
+                print(f"Connecting to server on {c.SERVER_IP}:{c.PORT}...")
                 self.socket.connect((c.SERVER_IP, c.PORT))  # connect to server
                 print(f"Connection Established to server on {c.SERVER_IP}:{c.PORT}")
                 sf.send_message(self.socket, self.name, c.CLIENT)  # send name to server
@@ -36,13 +39,13 @@ class Client(object):
                 print("Connection could not be established to server, trying again...")
                 continue
 
-            except OSError as e:
-                print("Connection could not be established to server, trying again...")
-                pass
+            except socket.error as e:
+                if e.errno != errno.EALREADY:
+                    raise e
 
             except Exception as e:
                 print('Error', str(e))
-                raise sf.CommError("Communication Error") from e
+                # raise sf.CommError("Communication Error") from e
 
     def create_client_socket(self):
         '''
@@ -114,17 +117,23 @@ class Client(object):
         '''
         if self.camera_manager == None:
             print('Initialising camera')
-            self.camera_manager = cam_utils.CameraManager()
-            self.camera_manager.start_camera()
+            self.camera_manager = camera_utils.CameraManager()
+            self.camera_process = mp.Process(target=self.camera_manager.start_camera, args=())
+            self.camera_process.start()
 
+            self.camera_manager.event_manager.picam_ready.wait()
             self.send_to_server(c.TYPE_START_CAM, True)
             return True
+        
         else:
             print('Error: Camera already initialised')
             return False
 
     def shutdown(self):
-        print('Shutting down')
+        print('Shutting down...')
+        self.camera_manager.event_manager.shutdown.set()
+        self.camera_manager.shutdown.wait()
+        self.camera_process.kill()
 
         sys.exit()
 

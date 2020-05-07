@@ -491,6 +491,7 @@ if __name__ == "__main__":
     server.initialise()
     server.initialise_picamera()
 
+    time.sleep(5)
     while True:
         try:
             message_list = server.read_client_messages(read_all=True)
