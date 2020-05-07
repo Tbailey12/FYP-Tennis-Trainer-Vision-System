@@ -19,14 +19,13 @@ class CommError(Error):
 		self.message = message
 
 
-'''
-pickles and encodes data with a with a defined 'data_type' in the format
-typeheader -> data_type -> messageheader -> message
-'''
-
-
 def send_message(socket, message_data, caller):
-	# format message header and encode message
+	'''
+	Format message into fixed length header and encoded message data
+		utf-8(Fixed length header) -> b(message data)
+
+	Return: True if message sent successfully
+	'''
 	message = pickle.dumps(message_data)
 	message_len = len(message)
 	message_header = f"{message_len:<{c.HEADER_LENGTH}}".encode('utf-8')
@@ -40,6 +39,8 @@ def send_message(socket, message_data, caller):
 			if sent == 0:
 				raise RuntimeError("Socket connection broken")
 			total_sent = total_sent + sent
+
+		return True  # if message sent successfully
 
 	except ConnectionResetError as e:
 		if caller == c.CLIENT:  # close the client if the server has disconnected
@@ -62,14 +63,15 @@ def send_message(socket, message_data, caller):
 	except Exception as e:  # could not send message for some reason
 		print("Send Error", e)
 		raise CommError("Send Error") from e
-	return True  # if message sent successfully
 
-
-'''
-receives a message from the given socket and decodes it
-'''
 
 def receive_message(client_socket, caller):
+	'''
+	Receives a message from the given socket and decodes it based on the format
+		utf-8(Fixed length header) -> b(message data)
+
+	Return:	message-> {header: message header, "data": message data}
+	'''
 	try:
 		message_header = client_socket.recv(c.HEADER_LENGTH)
 		if len(message_header) < c.HEADER_LENGTH:

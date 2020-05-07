@@ -4,17 +4,25 @@ import errno
 import sys
 import time
 import traceback
+from inspect import signature
 
 import consts as c
-import socket_funcs as sf 
+import socket_funcs as sf
+import camera as cam
+import l_r_consts
 
 class Client(object):
     def __init__(self, client_name):
         print(f"Client: {client_name} started")
         self.name = client_name
-        self.create_client_socket()
+        self.socket = self.create_client_socket()
         self.connect_to_server()
+        self.camera_manager = None
 
+        self.cmd_parser = {
+            c.TYPE_START_CAM: self.initialise_picamera,
+            c.TYPE_SHUTDOWN: self.shutdown
+        }
     def connect_to_server(self):
         # attempt to connect to the server, if connection refused, wait 1s then try again
         while True:
@@ -40,12 +48,12 @@ class Client(object):
         '''
         Creates the client socket for communication with the server
 
-        Return: True if socket is created
+        Return: client_socket
         '''
-        self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)  # create IPV4 socket
-        self.socket.settimeout(c.SOCKET_TIMEOUT)
-        self.socket.setblocking(True)
-        return True
+        client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)  # create IPV4 socket
+        client_socket.settimeout(c.SOCKET_TIMEOUT)
+        client_socket.setblocking(True)
+        return client_socket
 
     def read_server_messages(self,read_all=False):
         '''
@@ -76,24 +84,52 @@ class Client(object):
             raise sf.CommError("Communication Error") from e
 
     def send_to_server(self, message_type, message_data):
+        '''
+        Send message to the server given the message type and data
+
+        Return True if sent successfully
+        '''
         message = sf.MyMessage(message_type, message_data)
         sf.send_message(self.socket, message, c.CLIENT)
         return True
-    
-def initialise_picamera():
-    print('init camera')
-    return True
 
-def cmd_func(cmd):
-    func = cmd_parser.get(cmd, None)
-    return func()
+    def cmd_func(self, cmd, args=None):
+        func = self.cmd_parser.get(cmd, None)
 
-cmd_parser = {
-    c.TYPE_START_CAM: initialise_picamera
-}
+        if args == None:
+            return func()
+
+        elif len(signature(func).params) == len(args):
+                return func(*args)
+
+        else: return    
+
+
+    def initialise_picamera(self):
+        '''
+        Initialise the picamera with default values
+
+        Return: True if successful
+                False if not successful
+        '''
+        if self.camera_manager == None:
+            print('Initialising camera')
+            self.camera_manager = cam_utils.CameraManager()
+            self.camera_manager.start_camera()
+
+            self.send_to_server(c.TYPE_START_CAM, True)
+            return True
+        else:
+            print('Error: Camera already initialised')
+            return False
+
+    def shutdown(self):
+        print('Shutting down')
+
+        sys.exit()
 
 if __name__ == "__main__":
-    client_name = c.LEFT_CLIENT
+    client_name = l_r_consts.CLIENT_NAME
     if len(sys.argv)>1:
         client_name = sys.argv[1]
     client = Client(client_name)
@@ -102,9 +138,7 @@ if __name__ == "__main__":
         try:
             message_list = client.read_server_messages()
             for message in message_list:
-                cmd_func(message['data'].type)
-
-                client.send_to_server(c.TYPE_STR, f"{client_name} got message: {message['data'].message}")
+                client.cmd_func(message['data'].type, message['data'].message)
 
             time.sleep(1)
 
