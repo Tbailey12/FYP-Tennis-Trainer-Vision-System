@@ -37,17 +37,32 @@ def image_processor(frame_queues, event_manager, process_complete):
     B_less = np.zeros(c.FRAME_SIZE,dtype=np.uint8)
 
     while True:
-        time.sleep(1E-4)
+        time.sleep(1E-5)
         try:
             if event_manager.shutdown.is_set():
                 process_complete.set()
                 return
 
-            n_frame, n_frame_2, frame_buf = frame_queues.unprocessed_frames.get_nowait()
-            print(n_frame, n_frame_2)
+            n_frame_record, n_frame_idle, frame_buf = frame_queues.unprocessed_frames.get_nowait()
+            print(n_frame_record, n_frame_idle)
 
             # y_data is a numpy array h x w with 8 bit greyscale brightness values
             y_data = np.frombuffer(frame_buf, dtype=np.uint8, count=c.FRAME_HEIGHT*c.FRAME_WIDTH).reshape(c.FRAME_SIZE).astype(np.float32)
+
+            if event_manager.recording.is_set():
+                if event_manager.record_stream.is_set():
+                    if n_frame_record%c.STREAM_IMG_DELTA == 0:
+                        frame_queues.processed_frames.put((n_frame_record, y_data))
+
+                else:
+                    ##
+                    ## normal recording stuff
+                    pass
+
+            else:
+                ##
+                ## calculate mean/std
+                pass
 
             # if n_frame_2 > (last_n_frame+c.BACKGROUND_RATE) and not event_manager.event_change.is_set():
             #     last_n_frame = n_frame_2
@@ -123,7 +138,6 @@ def image_processor(frame_queues, event_manager, process_complete):
         except queue.Empty:
                 if not event_manager.recording.is_set() and frame_queues.unprocessed_frames.qsize() == 0:  # if the recording has finished
                     process_complete.set()
-                    time.sleep(0.5)
                     # ######### FOR TESTING ##############
                     # if total_frames>0:
                     #     print((total_time/total_frames)/1E6)
@@ -166,12 +180,12 @@ class FrameController(object):
         self.n_frame_idle = 0
 
         # create processors for processing the individual video frames
-        # for i in range(c.N_PROCESSORS):
-        #     proccess_complete = mp.Event()
-        #     processor = mp.Process(target=image_processor, args=(self.frame_queues, self.event_manager, proccess_complete))
-        #     self.processing_complete_list.append(proccess_complete)
-        #     self.processor_list.append(processor)
-        #     processor.start()
+        for i in range(c.N_PROCESSORS):
+            proccess_complete = mp.Event()
+            processor = mp.Process(target=image_processor, args=(self.frame_queues, self.event_manager, proccess_complete))
+            self.processing_complete_list.append(proccess_complete)
+            self.processor_list.append(processor)
+            processor.start()
 
     def write(self, buf):
         '''
@@ -179,8 +193,7 @@ class FrameController(object):
         n_frame_record keeps track of the frame number since recording
         n_frame_idle keep track of the frame number since camera initialisation
         '''
-        # self.frame_queues.unprocessed_frames.put((self.n_frame_record, self.n_frame_idle, buf))    # add the new frame to the queue
-        print(self.n_frame_record, self.n_frame_idle)
+        self.frame_queues.unprocessed_frames.put((self.n_frame_record, self.n_frame_idle, buf))    # add the new frame to the queue
         if self.event_manager.recording.is_set() or self.event_manager.record_stream.is_set():
             self.n_frame_record += 1
             self.n_frame_idle += 1
@@ -213,6 +226,14 @@ class CameraManager(object):
 
         self.processing_complete_list = []
         self.shutdown = mp.Event()
+        self.record_t = mp.Value('B', c.REC_T)
+
+    def add_annotations(self, camera):
+        camera.annotate_frame_num = True
+        camera.annotate_text_size = 160
+        camera.annotate_foreground = picamera.Color('green')
+
+        return True
 
     def set_params(self, camera):
         '''
@@ -225,10 +246,7 @@ class CameraManager(object):
         camera.iso = c.ISO
         camera.vflip = True
         camera.hflip = True
-        # camera.annotate_frame_num = True
-        # camera.annotate_text_size = 160
-        # camera.annotate_foreground = picamera.Color('green')
-        ## ----------------------------------------------- ##
+        # self.add_annotations(camera)
 
         time.sleep(2)   # give the camera a couple of seconds to initialise
         camera.shutter_speed = camera.exposure_speed
@@ -238,6 +256,20 @@ class CameraManager(object):
         camera.awb_gains = g
 
         return True
+
+    def record(self, record_t = None):
+        if record_t is not None:
+            if record_t > 0 and record_t < 255:
+                self.record_t.value = record_t
+        self.event_manager.recording.set()
+
+    def stream(self, stream_t = None):
+        if stream_t is not None:
+            if stream_t > 0 and stream_t < 255:
+                self.record_t.value = stream_t
+
+        self.event_manager.record_stream.set()
+        self.event_manager.recording.set()
 
     def manage_recording(self, camera):
         '''
@@ -249,15 +281,14 @@ class CameraManager(object):
                 try:
                     for process in self.processing_complete_list:  # reset all processing complete events
                         process.clear()
-                    camera.wait_recording(2) # record for an amount of time
+                    camera.wait_recording(self.record_t.value) # record for an amount of time
+                
                 finally:
                     self.event_manager.recording.clear()
                     for process in self.processing_complete_list:  # wait for all processing to be complete
                         process.wait()
                     self.event_manager.processing_complete.set()   # set processing complete event
-
-            elif self.event_manager.record_stream.is_set():
-                self.event_manager.processing_complete.wait()
+                    self.event_manager.record_stream.clear()
 
             elif self.event_manager.shutdown.is_set():
                 break

@@ -3,6 +3,7 @@ import select
 import errno
 import sys
 import time
+import queue
 import traceback
 from inspect import signature
 import multiprocessing as mp
@@ -23,6 +24,8 @@ class Client(object):
 
         self.cmd_parser = {
             c.TYPE_START_CAM: self.initialise_picamera,
+            c.TYPE_RECORD: self.record,
+            c.TYPE_STREAM: self.stream,
             c.TYPE_SHUTDOWN: self.shutdown
         }
     def connect_to_server(self):
@@ -102,7 +105,7 @@ class Client(object):
         if args == None:
             return func()
 
-        elif len(signature(func).params) == len(args):
+        elif len(signature(func).parameters) == len(args):
                 return func(*args)
 
         else: return    
@@ -129,6 +132,32 @@ class Client(object):
             print('Error: Camera already initialised')
             return False
 
+    def record(self, record_t):
+        self.camera_manager.record(record_t)
+        while True:
+            ##
+            ## Send frames to server until no more processed frames and recording is done
+            if  self.camera_manager.event_manager.processing_complete.is_set() and \
+                        not self.camera_manager.event_manager.recording.is_set():
+                self.send_to_server(c.TYPE_DONE, True)
+                break
+            time.sleep(0.001)
+
+    def stream(self, stream_t):
+        self.camera_manager.stream(stream_t)
+        while True:
+            try:
+                stream_data = self.camera_manager.frame_queues.processed_frames.get_nowait()
+                self.send_to_server(c.TYPE_IMG, stream_data)
+
+            except queue.Empty:
+                if self.camera_manager.event_manager.processing_complete.is_set() and \
+                        self.camera_manager.frame_queues.processed_frames.qsize() == 0:
+                    self.send_to_server(c.TYPE_DONE, True)
+                    break
+
+            time.sleep(0.001)
+
     def shutdown(self):
         print('Shutting down...')
         self.camera_manager.event_manager.shutdown.set()
@@ -149,7 +178,7 @@ if __name__ == "__main__":
             for message in message_list:
                 client.cmd_func(message['data'].type, message['data'].message)
 
-            time.sleep(1)
+            time.sleep(0.001)
 
         except sf.CommError as e:
             print('Server disconnected, closing client')

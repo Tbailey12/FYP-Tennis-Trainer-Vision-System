@@ -41,7 +41,7 @@ CHUNK_SIZE = 4096
 #################### - Message Consts - ####################
 TYPE_STR = "str"
 TYPE_VAR = "var"
-TYPE_REC = "rec"
+TYPE_RECORD = "rec"
 TYPE_CAP = "cap"
 TYPE_IMG = "img"
 TYPE_BALLS = "balls"
@@ -56,6 +56,7 @@ REC_T_MAX = 5				# maximum recording time
 CALIB_T = 10  				# number of calibration images to take
 CALIB_IMG_DELAY = 2 		# seconds between each image
 STREAM_MAX = 60 			# maximum time for a stream
+STREAM_IMG_DELTA = 15		# number of frames between each streamed image
 
 FRAMERATE = 90
 FRAME_HEIGHT = 480

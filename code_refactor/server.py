@@ -415,7 +415,6 @@ class Server(object):
                 left_connected, right_connected = False, False
 
                 for client_socket in self.clients:
-                    print(self.clients[client_socket]['data'])
                     left_connected = True if self.clients[client_socket]['data'] == c.LEFT_CLIENT else left_connected
                     right_connected = True if self.clients[client_socket]['data'] == c.RIGHT_CLIENT else right_connected
 
@@ -449,27 +448,58 @@ class Server(object):
         while True:
             message_list = self.read_client_messages()
             for message in message_list:
+                check_task_trigger(setup_complete, c.TYPE_START_CAM, message)
 
-                if  message['data'].type == c.TYPE_START_CAM and \
-                    message['data'].message == True:
-
-                    if message['client'] in setup_complete:
-                        setup_complete[message['client']] = True
-
-            all_setup = False
-            for client in setup_complete:
-                if setup_complete[client] is False:
-                    all_setup = False
-                    break
-                else:
-                    all_setup = True
-                    continue
-
-            if all_setup:
+            if check_task_complete(setup_complete):
                 print('Cameras initialised')
                 return True
 
             time.sleep(0.001)
+
+    def record(self, record_t):
+        '''
+        Sends a message to both clients to start a recording for record_t seconds
+        '''
+        print(f"Recording for {record_t} seconds")
+        message = sf.MyMessage(c.TYPE_RECORD, (record_t,))
+
+        recording_complete = {}
+        for client in self.client_names:
+            self.send_to_client(client, message)
+            recording_complete[client] = False
+
+        while True:
+            message_list = self.read_client_messages()
+            for message in message_list:
+                check_task_trigger(recording_complete, c.TYPE_DONE, message)
+
+            if check_task_complete(recording_complete):
+                print('Recording complete')
+                return True
+
+            time.sleep(0.001)
+
+    def stream(self, stream_t):
+        print(f"Streaming for {stream_t} seconds")
+        message = sf.MyMessage(c.TYPE_STREAM, (stream_t,))
+
+        stream_complete = {}
+        for client in self.client_names:
+            self.send_to_client(client, message)
+            stream_complete[client] = False
+
+        while True:
+            message_list = self.read_client_messages()
+            for message in message_list:
+                if not check_task_trigger(stream_complete, c.TYPE_DONE, message):
+                    check_save_img(message)
+
+            if check_task_complete(stream_complete):
+                print('Stream complete')
+                return True
+
+            time.sleep(0.001)
+
 
     def shutdown(self):
         '''
@@ -485,13 +515,40 @@ class Server(object):
         time.sleep(2)
         sys.exit()
 
+def check_save_img(message):
+    if message['data'].type == c.TYPE_IMG:
+        n_frame, img = message['data'].message
+        cv2.imwrite(f"{message['client']}_{n_frame:04d}.png", img)
+
+def check_task_trigger(task_status_dict, trigger_type, message):
+    if  message['data'].type == trigger_type and \
+        message['data'].message == True:
+
+        if message['client'] in task_status_dict:
+            task_status_dict[message['client']] = True
+
+def check_task_complete(task_status_dict):
+    all_done = False
+    for client in task_status_dict:
+        if task_status_dict[client] is False:
+            all_done = False
+            break
+        else:
+            all_done = True
+            continue
+
+    if all_done:
+        return True
+    else:
+        return False
+
 if __name__ == "__main__":
     print("Server started")
     server = Server()
     server.initialise()
     server.initialise_picamera()
-
-    time.sleep(5)
+    server.stream(1)
+    time.sleep(1)
     while True:
         try:
             message_list = server.read_client_messages(read_all=True)
