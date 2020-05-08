@@ -226,7 +226,7 @@ class CameraManager(object):
 
         self.processing_complete_list = []
         self.shutdown = mp.Event()
-        self.record_t = mp.Value('B', c.REC_T)
+        self.record_t = mp.Value('f', c.REC_T)
 
     def add_annotations(self, camera):
         camera.annotate_frame_num = True
@@ -259,13 +259,13 @@ class CameraManager(object):
 
     def record(self, record_t = None):
         if record_t is not None:
-            if record_t > 0 and record_t < 255:
+            if record_t > 0 and record_t < c.REC_T_MAX:
                 self.record_t.value = record_t
         self.event_manager.recording.set()
 
     def stream(self, stream_t = None):
         if stream_t is not None:
-            if stream_t > 0 and stream_t < 255:
+            if stream_t > 0 and stream_t < c.STREAM_MAX:
                 self.record_t.value = stream_t
 
         self.event_manager.record_stream.set()

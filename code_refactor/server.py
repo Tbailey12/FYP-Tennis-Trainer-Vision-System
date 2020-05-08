@@ -512,7 +512,6 @@ class Server(object):
         for client_name in self.client_names:
             self.send_to_client(client_name, message)
 
-        time.sleep(2)
         sys.exit()
 
 def check_save_img(message):
@@ -547,7 +546,7 @@ if __name__ == "__main__":
     server = Server()
     server.initialise()
     server.initialise_picamera()
-    server.stream(1)
+    server.record(1.5)
     time.sleep(1)
     while True:
         try:
