@@ -7,35 +7,85 @@ import time
 
 import consts as c
 
+class BackgroundImage(object):
+    def __init__(self):
+        # preallocate memory for all arrays used in processing
+        self.img_mean = np.zeros(c.FRAME_SIZE,dtype=np.float32)
+        self.img_std = np.ones(c.FRAME_SIZE,dtype=np.float32)
+
+        self.mean_1 = np.zeros(c.FRAME_SIZE,dtype=np.float32)
+        self.mean_2 = np.zeros(c.FRAME_SIZE,dtype=np.float32)
+        self.std_1  = np.zeros(c.FRAME_SIZE,dtype=np.float32)
+        self.std_2  = np.zeros(c.FRAME_SIZE,dtype=np.float32)
+        self.std_3  = np.zeros(c.FRAME_SIZE,dtype=np.float32)
+        self.std_4  = np.zeros(c.FRAME_SIZE,dtype=np.float32)
+        self.std_5  = np.zeros(c.FRAME_SIZE,dtype=np.float32)
+        self.std_6  = np.zeros(c.FRAME_SIZE,dtype=np.float32)
+
+    def calculate_mean(self, y_data):
+        # img_mean = (1 - p) * img_mean + p * y_data  # calculate mean
+        np.multiply(1-c.LEARNING_RATE,  self.img_mean,  out=self.mean_1)
+        np.multiply(c.LEARNING_RATE,    y_data,         out=self.mean_2)
+        np.add(     self.mean_1,        self.mean_2,    out=self.img_mean)
+
+        return True
+
+    def calculate_std_dev(self, y_data):
+        # img_std = np.sqrt((1 - p) * (img_std ** 2) + p * ((y_data - img_mean) ** 2))  # calculate std deviation
+        np.square(  self.img_std,                       out=self.std_1)
+        np.multiply(1-c.LEARNING_RATE,  self.std_1,     out=self.std_2)
+        np.subtract(y_data,             self.img_mean,  out=self.std_3)
+        np.square(  self.std_3,                         out=self.std_4)
+        np.multiply(c.LEARNING_RATE,    self.std_4,     out=self.std_5)
+        np.add(     self.std_2,         self.std_5,     out=self.std_6)
+        np.sqrt(    self.std_6,                         out=self.img_std)
+
+        return True
+
+class ForegroundImage(object):
+    def __init__(self):
+        # preallocate memory for all arrays used in processing
+        self.last_foreground = np.zeros(c.FRAME_SIZE,dtype=np.uint8)
+        self.foreground = np.zeros(c.FRAME_SIZE,dtype=np.uint8)
+        self.foreground_diff = np.zeros(c.FRAME_SIZE,dtype=np.uint8)
+
+        self.A          = np.zeros(c.FRAME_SIZE,dtype=np.uint8)
+        self.B_1_std    = np.zeros(c.FRAME_SIZE,dtype=np.float32)
+        self.B_1_mean   = np.zeros(c.FRAME_SIZE,dtype=np.float32)
+        self.B_greater  = np.zeros(c.FRAME_SIZE,dtype=np.uint8)
+        self.B_2_mean   = np.zeros(c.FRAME_SIZE,dtype=np.float32)
+        self.B_less     = np.zeros(c.FRAME_SIZE,dtype=np.uint8)
+
+    def extract_foreground(self, y_data, background_image):
+        self.last_foreground = np.copy(self.foreground)
+        # B = np.logical_or((y_data > (img_mean + 2*img_std)),
+                          # (y_data < (img_mean - 2*img_std)))  # foreground new
+        np.multiply(background_image.img_std,c.FOREGROUND_SENS,out=self.B_1_std)
+        np.add(     background_image.img_mean, self.B_1_std, out=self.B_1_mean)
+        np.subtract(background_image.img_mean, self.B_1_std, out=self.B_2_mean)
+
+        np.greater(   y_data, self.B_1_mean, out=self.B_greater)
+        np.less(      y_data, self.B_2_mean, out=self.B_less)
+
+        np.logical_or(self.B_greater, self.B_less, out=self.foreground)
+
+        return True
+
+    def foreground_difference(self):
+        np.invert(np.logical_and(self.last_foreground, self.foreground), out=self.A)  # difference between prev foreground and new foreground
+        np.logical_and(self.A, self.foreground, out=self.foreground_diff)   # different from previous frame and part of new frame
+        self.foreground_diff = 255*self.foreground_diff.astype(np.uint8)
+
+        return True
+
 def image_processor(frame_queues, event_manager, process_complete):
     processing = False
     process_complete.set()
 
-    # preallocate memory for all arrays used in processing
-    img_mean = np.zeros(c.FRAME_SIZE,dtype=np.float32)
-    img_std = np.ones(c.FRAME_SIZE,dtype=np.float32)
+    background_image = BackgroundImage()
+    foreground_image = ForegroundImage()
 
-    A =  np.zeros(c.FRAME_SIZE,dtype=np.uint8)
-    B = np.zeros(c.FRAME_SIZE,dtype=np.uint8)
-    B_old = np.zeros(c.FRAME_SIZE,dtype=np.uint8)
-    C = np.zeros(c.FRAME_SIZE,dtype=np.uint8)
-
-    mean_1 = np.zeros(c.FRAME_SIZE,dtype=np.float32)
-    mean_2 = np.zeros(c.FRAME_SIZE,dtype=np.float32)
-
-    std_1 = np.zeros(c.FRAME_SIZE,dtype=np.float32)
-    std_2 = np.zeros(c.FRAME_SIZE,dtype=np.float32)
-    std_3 = np.zeros(c.FRAME_SIZE,dtype=np.float32)
-    std_4 = np.zeros(c.FRAME_SIZE,dtype=np.float32)
-    std_5 = np.zeros(c.FRAME_SIZE,dtype=np.float32)
-    std_6 = np.zeros(c.FRAME_SIZE,dtype=np.float32)
-
-    B_1_std = np.zeros(c.FRAME_SIZE,dtype=np.float32)
-    B_1_mean = np.zeros(c.FRAME_SIZE,dtype=np.float32)
-    B_greater = np.zeros(c.FRAME_SIZE,dtype=np.uint8)
-    B_2_mean = np.zeros(c.FRAME_SIZE,dtype=np.float32)
-    B_less = np.zeros(c.FRAME_SIZE,dtype=np.uint8)
-
+    last_mean_frame = 0
     while True:
         time.sleep(1E-5)
         try:
@@ -44,42 +94,28 @@ def image_processor(frame_queues, event_manager, process_complete):
                 return
 
             n_frame_record, n_frame_idle, frame_buf = frame_queues.unprocessed_frames.get_nowait()
-            print(n_frame_record, n_frame_idle)
 
             # y_data is a numpy array h x w with 8 bit greyscale brightness values
             y_data = np.frombuffer(frame_buf, dtype=np.uint8, count=c.FRAME_HEIGHT*c.FRAME_WIDTH).reshape(c.FRAME_SIZE).astype(np.float32)
 
             if event_manager.recording.is_set():
+                # streaming
                 if event_manager.record_stream.is_set():
-                    if n_frame_record%c.STREAM_IMG_DELTA == 0:
+                    if n_frame_record%c.STREAM_IMG_DELTA == 0 and n_frame_record >= 0:
                         frame_queues.processed_frames.put((n_frame_record, y_data))
 
+                # recording
                 else:
-                    ##
-                    ## normal recording stuff
-                    pass
+                    if n_frame_record >= 0:
+                        foreground_image.extract_foreground(y_data, background_image)
+                        foreground_image.foreground_difference()
 
+            # calculate mean and standard deviation while idle
             else:
-                ##
-                ## calculate mean/std
-                pass
-
-            # if n_frame_2 > (last_n_frame+c.BACKGROUND_RATE) and not event_manager.event_change.is_set():
-            #     last_n_frame = n_frame_2
-
-            #     # img_mean = (1 - p) * img_mean + p * y_data  # calculate mean
-            #     np.multiply(1-p,img_mean,out=mean_1)
-            #     np.multiply(p,y_data,out=mean_2)
-            #     np.add(mean_1,mean_2,out=img_mean)
-                
-            #     # img_std = np.sqrt((1 - p) * (img_std ** 2) + p * ((y_data - img_mean) ** 2))  # calculate std deviation
-            #     np.square(img_std,out=std_1)
-            #     np.multiply(1-p,std_1,out=std_2)
-            #     np.subtract(y_data,img_mean,out=std_3)
-            #     np.square(std_3,out=std_4)
-            #     np.multiply(p,std_4,out=std_5)
-            #     np.add(std_2,std_5,out=std_6)
-            #     np.sqrt(std_6,out=img_std)
+                if n_frame_idle > (last_mean_frame + c.BACKGROUND_RATE):
+                    background_image.calculate_mean(y_data)
+                    background_image.calculate_std_dev(y_data)
+                    last_mean_frame = n_frame_idle            
 
             # if not proc_complete.is_set() and n_frame > -1:
                 # mean_data = img_mean

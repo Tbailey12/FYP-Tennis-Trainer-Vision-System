@@ -38,7 +38,7 @@ class Client(object):
                 sf.send_message(self.socket, self.name, c.CLIENT)  # send name to server
                 return True
 
-            except socket.timeout as e:
+            except (socket.timeout, TimeoutError) as e:
                 print("Connection could not be established to server, trying again...")
                 continue
 

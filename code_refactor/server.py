@@ -468,10 +468,14 @@ class Server(object):
             self.send_to_client(client, message)
             recording_complete[client] = False
 
+        left_ball_candidates, right_ball_candidates = [],[]
         while True:
             message_list = self.read_client_messages()
             for message in message_list:
-                check_task_trigger(recording_complete, c.TYPE_DONE, message)
+                if not check_task_trigger(recording_complete, c.TYPE_DONE, message):
+                    ##
+                    ## Get ball candidates
+                    pass
 
             if check_task_complete(recording_complete):
                 print('Recording complete')
@@ -546,6 +550,7 @@ if __name__ == "__main__":
     server = Server()
     server.initialise()
     server.initialise_picamera()
+    time.sleep(2)
     server.record(1.5)
     time.sleep(1)
     while True:

@@ -55,7 +55,7 @@ REC_T = 1					# default recording time
 REC_T_MAX = 5				# maximum recording time
 CALIB_T = 10  				# number of calibration images to take
 CALIB_IMG_DELAY = 2 		# seconds between each image
-STREAM_MAX = 60 			# maximum time for a stream
+STREAM_T_MAX = 60 			# maximum time for a stream
 STREAM_IMG_DELTA = 15		# number of frames between each streamed image
 
 FRAMERATE = 90
@@ -71,7 +71,8 @@ CAM_ANGLE = deg_2_rad(-6)
 ################## - Processing Consts - ##################
 N_PROCESSORS = 4
 LEARNING_RATE = 0.15
-BACKGROUND_RATE = 30
+BACKGROUND_RATE = 30	# number of frames between each background mean/std dev update
+FOREGROUND_SENS = 3		# how sensitive the image differencing is to changes (higher is more sensitive)
 N_OBJECTS = 50
 WIDTH = 0
 HEIGHT = 1
