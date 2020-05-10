@@ -468,22 +468,26 @@ class Server(object):
             self.send_to_client(client, message)
             recording_complete[client] = False
 
-        left_ball_candidates, right_ball_candidates = [],[]
+        ball_candidate_dict = dict.fromkeys(self.client_names)
         while True:
             message_list = self.read_client_messages()
             for message in message_list:
                 if not check_task_trigger(recording_complete, c.TYPE_DONE, message):
-                    ##
-                    ## Get ball candidates
-                    pass
+                    check_ball_cand(message, ball_candidate_dict)
 
             if check_task_complete(recording_complete):
                 print('Recording complete')
+                for key in ball_candidate_dict:
+                    for cand in ball_candidate_dict[key]:
+                        print(key, cand)
                 return True
 
             time.sleep(0.001)
 
     def stream(self, stream_t):
+        '''
+        Sends a message to both clients to start a stream for stream_t seconds
+        '''
         print(f"Streaming for {stream_t} seconds")
         message = sf.MyMessage(c.TYPE_STREAM, (stream_t,))
 
@@ -518,6 +522,12 @@ class Server(object):
 
         sys.exit()
 
+def check_ball_cand(message, ball_candidate_dict):
+    if message['data'].type == c.TYPE_BALLS:
+        if ball_candidate_dict[message['client']] is None:
+            ball_candidate_dict[message['client']] = []
+        ball_candidate_dict[message['client']].append(message['data'].message)
+
 def check_save_img(message):
     if message['data'].type == c.TYPE_IMG:
         n_frame, img = message['data'].message
@@ -550,8 +560,8 @@ if __name__ == "__main__":
     server = Server()
     server.initialise()
     server.initialise_picamera()
-    time.sleep(2)
-    server.record(1.5)
+    time.sleep(3)
+    server.record(1)
     time.sleep(1)
     while True:
         try:

@@ -132,15 +132,19 @@ class Client(object):
             print('Error: Camera already initialised')
             return False
 
+
     def record(self, record_t):
         self.camera_manager.record(record_t)
         while True:
-            ##
-            ## Send frames to server until no more processed frames and recording is done
-            if  self.camera_manager.event_manager.processing_complete.is_set() and \
-                        not self.camera_manager.event_manager.recording.is_set():
-                self.send_to_server(c.TYPE_DONE, True)
-                break
+            try:
+                ball_data = self.camera_manager.frame_queues.processed_frames.get_nowait()
+                self.send_to_server(c.TYPE_BALLS, ball_data)
+
+            except queue.Empty:
+                if  self.camera_manager.event_manager.processing_complete.is_set() and \
+                            not self.camera_manager.event_manager.recording.is_set():
+                    self.send_to_server(c.TYPE_DONE, True)
+                    break
             time.sleep(0.001)
 
     def stream(self, stream_t):

@@ -56,6 +56,8 @@ class ForegroundImage(object):
         self.B_2_mean   = np.zeros(c.FRAME_SIZE,dtype=np.float32)
         self.B_less     = np.zeros(c.FRAME_SIZE,dtype=np.uint8)
 
+        self.filter_kernel = (1/16)*np.ones((4,4), dtype=np.uint8)
+
     def extract_foreground(self, y_data, background_image):
         self.last_foreground = np.copy(self.foreground)
         # B = np.logical_or((y_data > (img_mean + 2*img_std)),
@@ -78,6 +80,25 @@ class ForegroundImage(object):
 
         return True
 
+    def filter_foreground(self):
+        self.foreground_diff = cv2.filter2D(self.foreground_diff, ddepth = -1, kernel=self.filter_kernel)
+        self.foreground_diff[self.foreground_diff<c.LPF_THRESH] = 0
+        self.foreground_diff[self.foreground_diff>=c.LPF_THRESH] = 255
+
+        return True
+
+    def get_ball_candidates(self):
+        n_features_cv, labels_cv, stats_cv, centroids_cv = cv2.connectedComponentsWithStats(self.foreground_diff, connectivity=4)
+        label_mask_cv = np.logical_and(stats_cv[:,cv2.CC_STAT_AREA]>c.BALL_SIZE_MIN, stats_cv[:,cv2.CC_STAT_AREA]<c.BALL_SIZE_MAX)
+        ball_candidates = np.concatenate((stats_cv[label_mask_cv,2:],centroids_cv[label_mask_cv]), axis=1)
+
+        return ball_candidates
+
+    def sort_ball_candidates(self, ball_candidates):
+        sorted_ball_candidates = ball_candidates[ball_candidates[:,c.SIZE].argsort()[::-1][:c.N_OBJECTS]]
+
+        return sorted_ball_candidates
+
 def image_processor(frame_queues, event_manager, process_complete):
     processing = False
     process_complete.set()
@@ -94,11 +115,14 @@ def image_processor(frame_queues, event_manager, process_complete):
                 return
 
             n_frame_record, n_frame_idle, frame_buf = frame_queues.unprocessed_frames.get_nowait()
-
             # y_data is a numpy array h x w with 8 bit greyscale brightness values
             y_data = np.frombuffer(frame_buf, dtype=np.uint8, count=c.FRAME_HEIGHT*c.FRAME_WIDTH).reshape(c.FRAME_SIZE).astype(np.float32)
 
-            if event_manager.recording.is_set():
+            if event_manager.recording.is_set() or not process_complete.is_set():
+
+                if process_complete.is_set():
+                    process_complete.clear()
+
                 # streaming
                 if event_manager.record_stream.is_set():
                     if n_frame_record%c.STREAM_IMG_DELTA == 0 and n_frame_record >= 0:
@@ -109,6 +133,10 @@ def image_processor(frame_queues, event_manager, process_complete):
                     if n_frame_record >= 0:
                         foreground_image.extract_foreground(y_data, background_image)
                         foreground_image.foreground_difference()
+                        foreground_image.filter_foreground()
+                        ball_candidates = foreground_image.get_ball_candidates()
+                        ball_candidates = foreground_image.sort_ball_candidates(ball_candidates)
+                        frame_queues.processed_frames.put((n_frame_record, n_frame_record))
 
             # calculate mean and standard deviation while idle
             else:
@@ -117,35 +145,7 @@ def image_processor(frame_queues, event_manager, process_complete):
                     background_image.calculate_std_dev(y_data)
                     last_mean_frame = n_frame_idle            
 
-            # if not proc_complete.is_set() and n_frame > -1:
-                # mean_data = img_mean
-                # std_data = img_std
-
-                # start = time.time_ns()
-                # B_old = np.copy(B)
-                # # B = np.logical_or((y_data > (img_mean + 2*img_std)),
-                #                   # (y_data < (img_mean - 2*img_std)))  # foreground new
-                # np.multiply(img_std,3,out=B_1_std)
-                # np.add(B_1_std,img_mean,out=B_1_mean)
-                # B_greater = np.greater(y_data,B_1_mean)
-                # np.subtract(img_mean,B_1_std,out=B_2_mean)
-                # B_less = np.less(y_data,B_2_mean)
-                # B = np.logical_or(B_greater,B_less)
-
-                # A = np.invert(np.logical_and(B_old, B))  # difference between prev foreground and new foreground
-                # C = np.logical_and(A, B)   # different from previous frame and part of new frame
-                
-                # C = 255*C.astype(np.uint8)
-
-                # C = cv2.filter2D(C, ddepth = -1, kernel=kernel4)
-                # C[C<c.LPF_THRESH] = 0
-                # C[C>=c.LPF_THRESH] = 255
-
-                # n_features_cv, labels_cv, stats_cv, centroids_cv = cv2.connectedComponentsWithStats(C, connectivity=4)
-
-                # label_mask_cv = np.logical_and(stats_cv[:,cv2.CC_STAT_AREA]>2, stats_cv[:,cv2.CC_STAT_AREA]<10000)
-                # ball_candidates = np.concatenate((stats_cv[label_mask_cv,2:],centroids_cv[label_mask_cv]), axis=1)
-
+            
                 # # sort ball candidates by size and keep the top 100
                 # ball_candidates = ball_candidates[ball_candidates[:,c.SIZE].argsort()[::-1][:c.N_OBJECTS]]
 
@@ -193,7 +193,7 @@ def image_processor(frame_queues, event_manager, process_complete):
                     #     C_array = []
                     #     save_arr = False
                     # ######### FOR TESTING ##############
-
+        
 class EventManager(object):
     '''
     Manages an array of mp.Events shared between processes
@@ -255,6 +255,20 @@ class FrameQueues(object):
         self.unprocessed_frames = mp.Queue()
         self.processed_frames = mp.Queue()
 
+    def empty_processed(self):
+        while True:
+            try:
+                self.processed_frames.get_nowait()
+            except queue.Empty:
+                break
+
+    def empty_unprocessed(self):
+        while True:
+            try:
+                self.unprocessed_frames.get_nowait()
+            except queue.Empty:
+                break
+
 class CameraManager(object):
     def __init__(self):
         self.frame_queues = FrameQueues()
@@ -297,6 +311,7 @@ class CameraManager(object):
         if record_t is not None:
             if record_t > 0 and record_t < c.REC_T_MAX:
                 self.record_t.value = record_t
+        self.frame_queues.empty_unprocessed()
         self.event_manager.recording.set()
 
     def stream(self, stream_t = None):
@@ -304,6 +319,7 @@ class CameraManager(object):
             if stream_t > 0 and stream_t < c.STREAM_MAX:
                 self.record_t.value = stream_t
 
+        self.frame_queues.empty_unprocessed()
         self.event_manager.record_stream.set()
         self.event_manager.recording.set()
 
@@ -337,13 +353,13 @@ class CameraManager(object):
 
         Return: True
         '''
+
         with picamera.PiCamera() as camera:
             self.set_params(camera)
             output = FrameController(self.frame_queues, self.event_manager, self.processing_complete_list)
             camera.start_recording(output, format='yuv')
             self.event_manager.picam_ready.set()
             self.manage_recording(camera)
-
         self.shutdown.set()
 
 # ## -- imports -- ##
