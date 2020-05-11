@@ -11,12 +11,310 @@ import numpy as np
 # from mpl_toolkits.mplot3d import Axes3D
 
 import consts as c
+import funcs as func
 import socket_funcs as sf
 import stereo_calibration as s_cal
 
 right_client_bypass = True
 
-# def search_for_chessboards(chessboards_found, chessboards, left_frame, right_frame):
+class Server(object):
+    def __init__(self):
+        self.root_p = os.getcwd()
+        self.socket = self.create_server_socket()
+        self.stereo_calib = self.load_stereo_calib(c.ACTIVE_STEREO_F)
+        self.sockets_list = [self.socket]    # list of sockets, init with server socket
+        self.clients = {}                    # dict of key:socket, value:client_name
+        self.client_names = []
+
+    def create_server_socket(self):
+        '''
+        Creates a socket for communication with clients
+        '''
+        server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)  # create IPV4 socket for server
+        server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)  # allows us to reconnect to same port
+
+        server_socket.bind((c.SERVER_IP, c.PORT))
+        server_socket.listen()
+        return server_socket
+
+    def add_new_client(self):
+        '''
+        Adds a new client to the clients dict and adds the corresponding socket to sockets list
+        Return: True if new client
+                False if no new client
+        '''
+        client_socket, client_address = self.socket.accept()
+        try:
+            client = sf.receive_message(client_socket, c.SERVER)
+            if client is not None:
+                self.sockets_list.append(client_socket)
+                self.clients[client_socket] = client
+                print(f"Accepted connection from client: {client['data']} on {client_address[0]}:{client_address[1]}")
+                self.client_names.append(client['data'])
+                return True
+            else:
+                return False
+
+        except sf.CommError as e:
+            print(e.message)
+            return False
+
+    def send_to_client(self, client_name, message):
+        '''
+        Send message to the client specified by client_name
+
+        Return: True if sent, False if error
+        '''
+        try:
+            for client_socket in self.sockets_list:
+                if client_socket != self.socket:  # if the socket is not the server socket
+                    # send left message
+                    if self.clients[client_socket]['data'] == client_name:
+                        c.print_debug(f"Sending message to {client_name} client: Time: {message}")
+                        sf.send_message(client_socket, message, c.SERVER)
+            return True
+
+        except sf.CommError as e:
+            raise sf.CommError(e)
+            return False
+
+    def read_client_messages(self, read_all=False):
+        '''
+        Read messages from all connected clients
+        read_all=False (default) - One message at a time
+        read_all=True - Read all messages at once
+
+        Return list of messages [{header: message_header, data: message_data}]
+        '''
+        message_list = []
+        read_sockets, _, exception_sockets = select.select(self.sockets_list, [], self.sockets_list, 0)
+
+        while read_sockets:
+            for notified_socket in read_sockets:
+                # new client connected
+                if notified_socket == self.socket:  # client has connected, so accept and handle connection
+                    self.add_new_client()
+                # existing client connected
+                else:
+                    message = sf.receive_message(notified_socket, c.SERVER)
+
+                    if message is None:
+                        print(f"Closed connection from {self.clients[notified_socket]['data']}")
+                        self.sockets_list.remove(notified_socket)
+                        del self.clients[notified_socket]
+                        continue
+
+                    client = self.clients[notified_socket]
+                    c.print_debug(f"Received message from {client['data']}: {message['data']}")
+                    message_list.append({"client": client['data'], "data": message['data']})
+
+            # if there is an exception, remove the socket from the list
+            for notified_socket in exception_sockets:
+                self.sockets_list.remove(notified_socket)
+                del self.clients[notified_socket]
+
+            if read_all:
+                read_sockets, _, exception_sockets = select.select(self.sockets_list, [], self.sockets_list, 0)
+                continue
+            else:
+                break
+
+        return message_list
+
+    def load_stereo_calib(self, filename):
+        stereo_calib = s_cal.StereoCal()
+        try:
+            os.chdir(func.make_path(self.root_p, c.DATA_DIR, c.STEREO_CALIB_DIR))
+            stereo_calib.load_params(filename)
+            os.chdir(self.root_p)
+            return stereo_calib
+
+        except ValueError as e:
+            print(e)
+            return None
+
+    def initialise(self):
+        '''
+        Waits for both left and right client to be connected to the server
+
+        Return: True if initialised, False if not
+        '''
+        while True:
+            self.read_client_messages()
+
+            if len(self.clients) >= 1:
+                left_connected, right_connected = False, False
+
+                for client_socket in self.clients:
+                    left_connected = True if self.clients[client_socket]['data'] == c.LEFT_CLIENT else left_connected
+                    right_connected = True if self.clients[client_socket]['data'] == c.RIGHT_CLIENT else right_connected
+
+                if left_connected and right_connected:
+                    print('both clients connected')
+                    return True
+
+                elif left_connected and right_client_bypass:
+                    print('left client connected')
+                    return True
+
+            time.sleep(0.01)
+        return False
+
+    def initialise_picamera(self):
+        '''
+        Sends message to both clients to start the picameras
+        Waits for confirmation of camera startup
+
+        Return: True if cameras started
+        False: Cameras not started
+        '''
+        print('Initialising cameras')
+        message = sf.MyMessage(c.TYPE_START_CAM, None)
+        setup_complete = {}
+
+        for client in self.client_names:
+            self.send_to_client(client, message)
+            setup_complete[client] = False
+
+        while True:
+            message_list = self.read_client_messages()
+            for message in message_list:
+                check_task_trigger(setup_complete, c.TYPE_START_CAM, message)
+
+            if check_task_complete(setup_complete):
+                print('Cameras initialised')
+                return True
+
+            time.sleep(0.001)
+
+    def record(self, record_t):
+        '''
+        Sends a message to both clients to start a recording for record_t seconds
+        '''
+        print(f"Recording for {record_t} seconds")
+        message = sf.MyMessage(c.TYPE_RECORD, (record_t,))
+
+        recording_complete = {}
+        for client in self.client_names:
+            self.send_to_client(client, message)
+            recording_complete[client] = False
+
+        ball_candidate_dict = dict.fromkeys(self.client_names)
+        while True:
+            message_list = self.read_client_messages()
+            for message in message_list:
+                if not check_task_trigger(recording_complete, c.TYPE_DONE, message):
+                    check_ball_cand(message, ball_candidate_dict, self.stereo_calib)
+
+            if check_task_complete(recording_complete):
+                print('Recording complete')
+                for key in ball_candidate_dict:
+                    for cand in ball_candidate_dict[key]:
+                        print(key, cand)
+                return True
+
+            time.sleep(0.001)
+
+    def stream(self, stream_t):
+        '''
+        Sends a message to both clients to start a stream for stream_t seconds
+        '''
+        print(f"Streaming for {stream_t} seconds")
+        message = sf.MyMessage(c.TYPE_STREAM, (stream_t,))
+
+        stream_complete = {}
+        for client in self.client_names:
+            self.send_to_client(client, message)
+            stream_complete[client] = False
+
+        while True:
+            message_list = self.read_client_messages()
+            for message in message_list:
+                if not check_task_trigger(stream_complete, c.TYPE_DONE, message):
+                    check_save_img(message)
+
+            if check_task_complete(stream_complete):
+                print('Stream complete')
+                return True
+
+            time.sleep(0.001)
+
+    def shutdown(self):
+        '''
+        Sends a shutdown command to both clients then shuts down the server
+
+        Return: 
+        '''
+        print('Shutting down...')
+        message = sf.MyMessage(c.TYPE_SHUTDOWN, None)
+        for client_name in self.client_names:
+            self.send_to_client(client_name, message)
+
+        sys.exit()
+
+def check_ball_cand(message, ball_candidate_dict, stereo_calib):
+    if message['data'].type == c.TYPE_BALLS:
+        if ball_candidate_dict[message['client']] is None:
+            ball_candidate_dict[message['client']] = []
+
+        rectify_points(message['data'].message[1], *stereo_calib.get_params(message['client']))
+        ball_candidate_dict[message['client']].append(message['data'].message)
+
+def check_save_img(message):
+    if message['data'].type == c.TYPE_IMG:
+        n_frame, img = message['data'].message
+        cv2.imwrite(f"{message['client']}_{n_frame:04d}.png", img)
+
+def check_task_trigger(task_status_dict, trigger_type, message):
+    if  message['data'].type == trigger_type and \
+        message['data'].message == True:
+
+        if message['client'] in task_status_dict:
+            task_status_dict[message['client']] = True
+
+def check_task_complete(task_status_dict):
+    all_done = False
+    for client in task_status_dict:
+        if task_status_dict[client] is False:
+            all_done = False
+            break
+        else:
+            all_done = True
+            continue
+
+    if all_done:
+        return True
+    else:
+        return False
+
+def rectify_points(frame, camera_matrix, dist_coeffs, R_matrix, P_matrix, *args):
+    for candidate in frame:
+        if candidate is not []:
+            candidate[c.X_COORD:c.Y_COORD+1] = cv2.undistortPoints(candidate[c.X_COORD:c.Y_COORD+1], camera_matrix, dist_coeffs, R=R_matrix, P=P_matrix)
+
+if __name__ == "__main__":
+    print("Server started")
+    server = Server()
+    server.initialise()
+    server.initialise_picamera()
+    time.sleep(3)
+    server.record(1)
+    time.sleep(1)
+    while True:
+        try:
+            message_list = server.read_client_messages(read_all=True)
+
+            for message in message_list:
+                print(message['data'].message)
+
+            server.shutdown()
+            time.sleep(1)
+
+        except sf.CommError as e:
+            print("Connection to client closed unexpectedly, shutting down...")
+            quit()
+
+    # def search_for_chessboards(chessboards_found, chessboards, left_frame, right_frame):
 #     left_chessboard = s_cal.find_chessboards(left_frame)
 #     if left_chessboard:
 #         right_chessboard = s_cal.find_chessboards(right_frame)
@@ -300,282 +598,6 @@ right_client_bypass = True
 #                             return None
 #                 pos += 1
 
-class Server(object):
-    def __init__(self):
-        self.socket = self.create_server_socket()
-        self.sockets_list = [self.socket]    # list of sockets, init with server socket
-        self.clients = {}                    # dict of key:socket, value:client_name
-        self.client_names = []
-
-    def create_server_socket(self):
-        '''
-        Creates a socket for communication with clients
-        '''
-        server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)  # create IPV4 socket for server
-        server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)  # allows us to reconnect to same port
-
-        server_socket.bind((c.SERVER_IP, c.PORT))
-        server_socket.listen()
-        return server_socket
-
-    def add_new_client(self):
-        '''
-        Adds a new client to the clients dict and adds the corresponding socket to sockets list
-        Return: True if new client
-                False if no new client
-        '''
-        client_socket, client_address = self.socket.accept()
-        try:
-            client = sf.receive_message(client_socket, c.SERVER)
-            if client is not None:
-                self.sockets_list.append(client_socket)
-                self.clients[client_socket] = client
-                print(f"Accepted connection from client: {client['data']} on {client_address[0]}:{client_address[1]}")
-                self.client_names.append(client['data'])
-                return True
-            else:
-                return False
-
-        except sf.CommError as e:
-            print(e.message)
-            return False
-
-    def send_to_client(self, client_name, message):
-        '''
-        Send message to the client specified by client_name
-
-        Return: True if sent, False if error
-        '''
-        try:
-            for client_socket in self.sockets_list:
-                if client_socket != self.socket:  # if the socket is not the server socket
-                    # send left message
-                    if self.clients[client_socket]['data'] == client_name:
-                        c.print_debug(f"Sending message to {client_name} client: Time: {message}")
-                        sf.send_message(client_socket, message, c.SERVER)
-            return True
-
-        except sf.CommError as e:
-            raise sf.CommError(e)
-            return False
-
-    def read_client_messages(self, read_all=False):
-        '''
-        Read messages from all connected clients
-        read_all=False (default) - One message at a time
-        read_all=True - Read all messages at once
-
-        Return list of messages [{header: message_header, data: message_data}]
-        '''
-        message_list = []
-        read_sockets, _, exception_sockets = select.select(self.sockets_list, [], self.sockets_list, 0)
-
-        while read_sockets:
-            for notified_socket in read_sockets:
-                # new client connected
-                if notified_socket == self.socket:  # client has connected, so accept and handle connection
-                    self.add_new_client()
-                # existing client connected
-                else:
-                    message = sf.receive_message(notified_socket, c.SERVER)
-
-                    if message is None:
-                        print(f"Closed connection from {self.clients[notified_socket]['data']}")
-                        self.sockets_list.remove(notified_socket)
-                        del self.clients[notified_socket]
-                        continue
-
-                    client = self.clients[notified_socket]
-                    c.print_debug(f"Received message from {client['data']}: {message['data']}")
-                    message_list.append({"client": client['data'], "data": message['data']})
-
-            # if there is an exception, remove the socket from the list
-            for notified_socket in exception_sockets:
-                self.sockets_list.remove(notified_socket)
-                del self.clients[notified_socket]
-
-            if read_all:
-                read_sockets, _, exception_sockets = select.select(self.sockets_list, [], self.sockets_list, 0)
-                continue
-            else:
-                break
-
-        return message_list
-
-    def initialise(self):
-        '''
-        Waits for both left and right client to be connected to the server
-
-        Return: True if initialised, False if not
-        '''
-        while True:
-            self.read_client_messages()
-
-            if len(self.clients) >= 1:
-                left_connected, right_connected = False, False
-
-                for client_socket in self.clients:
-                    left_connected = True if self.clients[client_socket]['data'] == c.LEFT_CLIENT else left_connected
-                    right_connected = True if self.clients[client_socket]['data'] == c.RIGHT_CLIENT else right_connected
-
-                if left_connected and right_connected:
-                    print('both clients connected')
-                    return True
-
-                elif left_connected and right_client_bypass:
-                    print('left client connected')
-                    return True
-
-            time.sleep(0.01)
-        return False
-
-    def initialise_picamera(self):
-        '''
-        Sends message to both clients to start the picameras
-        Waits for confirmation of camera startup
-
-        Return: True if cameras started
-        False: Cameras not started
-        '''
-        print('Initialising cameras')
-        message = sf.MyMessage(c.TYPE_START_CAM, None)
-        setup_complete = {}
-
-        for client in self.client_names:
-            self.send_to_client(client, message)
-            setup_complete[client] = False
-
-        while True:
-            message_list = self.read_client_messages()
-            for message in message_list:
-                check_task_trigger(setup_complete, c.TYPE_START_CAM, message)
-
-            if check_task_complete(setup_complete):
-                print('Cameras initialised')
-                return True
-
-            time.sleep(0.001)
-
-    def record(self, record_t):
-        '''
-        Sends a message to both clients to start a recording for record_t seconds
-        '''
-        print(f"Recording for {record_t} seconds")
-        message = sf.MyMessage(c.TYPE_RECORD, (record_t,))
-
-        recording_complete = {}
-        for client in self.client_names:
-            self.send_to_client(client, message)
-            recording_complete[client] = False
-
-        ball_candidate_dict = dict.fromkeys(self.client_names)
-        while True:
-            message_list = self.read_client_messages()
-            for message in message_list:
-                if not check_task_trigger(recording_complete, c.TYPE_DONE, message):
-                    check_ball_cand(message, ball_candidate_dict)
-
-            if check_task_complete(recording_complete):
-                print('Recording complete')
-                for key in ball_candidate_dict:
-                    for cand in ball_candidate_dict[key]:
-                        print(key, cand)
-                return True
-
-            time.sleep(0.001)
-
-    def stream(self, stream_t):
-        '''
-        Sends a message to both clients to start a stream for stream_t seconds
-        '''
-        print(f"Streaming for {stream_t} seconds")
-        message = sf.MyMessage(c.TYPE_STREAM, (stream_t,))
-
-        stream_complete = {}
-        for client in self.client_names:
-            self.send_to_client(client, message)
-            stream_complete[client] = False
-
-        while True:
-            message_list = self.read_client_messages()
-            for message in message_list:
-                if not check_task_trigger(stream_complete, c.TYPE_DONE, message):
-                    check_save_img(message)
-
-            if check_task_complete(stream_complete):
-                print('Stream complete')
-                return True
-
-            time.sleep(0.001)
-
-
-    def shutdown(self):
-        '''
-        Sends a shutdown command to both clients then shuts down the server
-
-        Return: 
-        '''
-        print('Shutting down...')
-        message = sf.MyMessage(c.TYPE_SHUTDOWN, None)
-        for client_name in self.client_names:
-            self.send_to_client(client_name, message)
-
-        sys.exit()
-
-def check_ball_cand(message, ball_candidate_dict):
-    if message['data'].type == c.TYPE_BALLS:
-        if ball_candidate_dict[message['client']] is None:
-            ball_candidate_dict[message['client']] = []
-        ball_candidate_dict[message['client']].append(message['data'].message)
-
-def check_save_img(message):
-    if message['data'].type == c.TYPE_IMG:
-        n_frame, img = message['data'].message
-        cv2.imwrite(f"{message['client']}_{n_frame:04d}.png", img)
-
-def check_task_trigger(task_status_dict, trigger_type, message):
-    if  message['data'].type == trigger_type and \
-        message['data'].message == True:
-
-        if message['client'] in task_status_dict:
-            task_status_dict[message['client']] = True
-
-def check_task_complete(task_status_dict):
-    all_done = False
-    for client in task_status_dict:
-        if task_status_dict[client] is False:
-            all_done = False
-            break
-        else:
-            all_done = True
-            continue
-
-    if all_done:
-        return True
-    else:
-        return False
-
-if __name__ == "__main__":
-    print("Server started")
-    server = Server()
-    server.initialise()
-    server.initialise_picamera()
-    time.sleep(3)
-    server.record(1)
-    time.sleep(1)
-    while True:
-        try:
-            message_list = server.read_client_messages(read_all=True)
-
-            for message in message_list:
-                print(message['data'].message)
-
-            server.shutdown()
-            time.sleep(1)
-
-        except sf.CommError as e:
-            print("Connection to client closed unexpectedly, shutting down...")
-            quit()
 
     # time.sleep(3)
     # print('initialised')

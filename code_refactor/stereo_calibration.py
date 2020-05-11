@@ -62,6 +62,14 @@ class StereoCal(object):
 
 		return None
 
+	def get_params(self, camera_name):
+		if camera_name == c.LEFT_CLIENT:
+			return self.cameraMatrix1, self.distCoeffs1, self.R1, self.P1, self.validPixROI1
+		elif camera_name == c.RIGHT_CLIENT:
+			return self.cameraMatrix2, self.distCoeffs2, self.R2, self.P2, self.validPixROI2
+		else:
+			return None
+
 class CamCal(object):
 	def __init__(self, rms = None, camera_matrix = None, dist_coefs = None, rvecs = None, tvecs = None):
 		self.rms = rms
@@ -89,8 +97,9 @@ class CamCal(object):
 				self.tvecs = myfile['tvecs']
 				os.chdir(c.ROOT_P)
 				return True
+
 		except OSError:
-			print(f"{filename} does not exist")
+			raise ValueError(f"{filename} does not exist")
 
 def load_calibs():
 	os.chdir(c.ACTIVE_CALIB_P)

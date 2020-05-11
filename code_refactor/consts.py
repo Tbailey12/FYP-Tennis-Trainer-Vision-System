@@ -130,13 +130,13 @@ ACTIVE_CALIB_F = '2020-04-03_calib'
 ACTIVE_STEREO_F = '0.4008stereo_calib.npy'	# filename of stereo calib
 
 #################### - Directory Consts - ####################
-IMG_F = 'img'
-DATA_F = 'data'
-CALIB_F = 'calib'
-S_CALIB_F = 'stereo_calib'
-CALIB_IMG_L = 'calib_L'
-CALIB_IMG_R = 'calib_R'
-CALIB_IMG_S = 'calib_S'
+IMG_DIR = 'img'
+DATA_DIR = 'data'
+CALIB_DIR = 'calib'
+STEREO_CALIB_DIR = 'stereo_calib'
+CALIB_IMG_L_DIR = 'calib_L'
+CALIB_IMG_R_DIR = 'calib_R'
+CALIB_IMG_S_DIR = 'calib_S'
 
 # import os
 # ROOT_P = os.getcwd()

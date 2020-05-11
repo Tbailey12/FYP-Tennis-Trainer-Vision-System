@@ -108,7 +108,7 @@ def image_processor(frame_queues, event_manager, process_complete):
 
     last_mean_frame = 0
     while True:
-        time.sleep(1E-5)
+        time.sleep(1E-6)
         try:
             if event_manager.shutdown.is_set():
                 process_complete.set()
@@ -136,7 +136,7 @@ def image_processor(frame_queues, event_manager, process_complete):
                         foreground_image.filter_foreground()
                         ball_candidates = foreground_image.get_ball_candidates()
                         ball_candidates = foreground_image.sort_ball_candidates(ball_candidates)
-                        frame_queues.processed_frames.put((n_frame_record, n_frame_record))
+                        frame_queues.processed_frames.put((n_frame_record, ball_candidates))
 
             # calculate mean and standard deviation while idle
             else:

@@ -5,23 +5,43 @@ Stores basic functions that are shared across all tennis trainer scripts
 ##########################################################
 import consts as c
 
-# Print function for debug messages
 def print_debug(my_print):
-    if c.DEBUG:
-        print(my_print)
+	'''
+	Print function for debug messages
+	'''
+	if c.DEBUG:
+		print(my_print)
 
-# Converts km per hour to metre per second
 def kph_2_mps(kph):
+	'''
+	Converts km per hour to metre per second
+	'''
 	return kph*10/36
 
-# Converts metre per second to km per hour
 def mps_2_kph(mps):
+	'''
+	Converts metre per second to km per hour
+	'''
 	return mps*3.6
 
-# Converts degrees to radians
 def deg_2_rad(angle_deg):
+	'''
+	Converts degrees to radians
+	'''
 	return angle_deg*c.PI/180
 
-# Converts radians to degrees
 def rad_2_deg(angle_rad):
+	'''
+	Converts radians to degrees
+	'''
 	return angle_rad*180/c.PI
+
+def make_path(root, *args):
+	'''
+	Creates a path or args with starting with root separated by //
+	'''
+	path = root
+	for i, arg in enumerate(args):
+	    path+=("//" + arg)
+
+	return path

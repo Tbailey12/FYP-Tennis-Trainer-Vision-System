@@ -29,7 +29,11 @@ class Client(object):
             c.TYPE_SHUTDOWN: self.shutdown
         }
     def connect_to_server(self):
-        # attempt to connect to the server, if connection refused, wait 1s then try again
+        '''
+        Attempt to connect to the server, if connection refused, wait 1s then try again
+
+        Return: True once connected
+        '''
         while True:
             try:
                 print(f"Connecting to server on {c.SERVER_IP}:{c.PORT}...")
@@ -100,6 +104,9 @@ class Client(object):
         return True
 
     def cmd_func(self, cmd, args=None):
+        '''
+        Attempts to call the function cmd from self.cmd_parser with any additional args if they exist
+        '''
         func = self.cmd_parser.get(cmd, None)
 
         if args == None:
@@ -134,6 +141,10 @@ class Client(object):
 
 
     def record(self, record_t):
+        '''
+        Records for record_t using the existing camera object and sends all ball candidate data to the server
+        Sends TYPE_DONE when no more messages to send
+        '''
         self.camera_manager.record(record_t)
         while True:
             try:
@@ -148,6 +159,10 @@ class Client(object):
             time.sleep(0.001)
 
     def stream(self, stream_t):
+        '''
+        Streams for stream_t using the existing camera object and sends all raw frame data to the server
+        Sends TYPE_DONE when no more messages to send        
+        '''
         self.camera_manager.stream(stream_t)
         while True:
             try:
@@ -163,6 +178,9 @@ class Client(object):
             time.sleep(0.001)
 
     def shutdown(self):
+        '''
+        Attempts to gracefully close all processes that are currently running then closes the script
+        '''
         print('Shutting down...')
         self.camera_manager.event_manager.shutdown.set()
         self.camera_manager.shutdown.wait()
