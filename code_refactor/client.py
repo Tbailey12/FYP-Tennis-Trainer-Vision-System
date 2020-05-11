@@ -204,6 +204,7 @@ if __name__ == "__main__":
 
         except sf.CommError as e:
             print('Server disconnected, closing client')
+            client.shutdown()
             quit()
 
     # counter = 0

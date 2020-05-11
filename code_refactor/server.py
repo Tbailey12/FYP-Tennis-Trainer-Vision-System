@@ -7,6 +7,7 @@ import queue
 import cv2
 import multiprocessing as mp
 import numpy as np
+from inspect import signature
 # import matplotlib.pyplot as plt
 # from mpl_toolkits.mplot3d import Axes3D
 
@@ -14,6 +15,7 @@ import consts as c
 import funcs as func
 import socket_funcs as sf
 import stereo_calibration as s_cal
+import triangulation as tr
 
 right_client_bypass = True
 
@@ -25,6 +27,12 @@ class Server(object):
         self.sockets_list = [self.socket]    # list of sockets, init with server socket
         self.clients = {}                    # dict of key:socket, value:client_name
         self.client_names = []
+
+        self.cmd_parser = {
+            c.TYPE_RECORD: self.record,
+            c.TYPE_STREAM: self.stream,
+            c.TYPE_SHUTDOWN: self.shutdown
+        }
 
     def create_server_socket(self):
         '''
@@ -199,7 +207,7 @@ class Server(object):
             self.send_to_client(client, message)
             recording_complete[client] = False
 
-        ball_candidate_dict = dict.fromkeys(self.client_names)
+        ball_candidate_dict = dict.fromkeys(self.client_names, {})
         while True:
             message_list = self.read_client_messages()
             for message in message_list:
@@ -208,9 +216,9 @@ class Server(object):
 
             if check_task_complete(recording_complete):
                 print('Recording complete')
-                for key in ball_candidate_dict:
-                    for cand in ball_candidate_dict[key]:
-                        print(key, cand)
+                points_3d = tr.triangulate_points(ball_candidate_dict, self.stereo_calib)
+                for point in points_3d:
+                    print(point)
                 return True
 
             time.sleep(0.001)
@@ -252,13 +260,30 @@ class Server(object):
 
         sys.exit()
 
-def check_ball_cand(message, ball_candidate_dict, stereo_calib):
-    if message['data'].type == c.TYPE_BALLS:
-        if ball_candidate_dict[message['client']] is None:
-            ball_candidate_dict[message['client']] = []
+    def cmd_func(self, cmd):
+        '''
+        Attempts to call the function cmd from self.cmd_parser with any additional args if they exist
+        '''
+        split = cmd.split(" ")
 
+        func = self.cmd_parser.get(split[0], None)
+
+        if len(split) == 1:
+            return func()
+
+        elif len(signature(func).parameters) == len(split)-1:
+                return func(*split[1:])
+
+        else: return    
+
+def check_ball_cand(message, ball_candidate_dict, stereo_calib):
+    '''
+    Checks if received message is ball candidates, if yes, it rectifies the candidate points and adds
+    the candidates to the ball_candidate_dict with inner key = client and outer key = frame num
+    '''
+    if message['data'].type == c.TYPE_BALLS:
         rectify_points(message['data'].message[1], *stereo_calib.get_params(message['client']))
-        ball_candidate_dict[message['client']].append(message['data'].message)
+        ball_candidate_dict[message['client']][message['data'].message[0]] = message['data'].message[1]
 
 def check_save_img(message):
     if message['data'].type == c.TYPE_IMG:
@@ -297,9 +322,7 @@ if __name__ == "__main__":
     server = Server()
     server.initialise()
     server.initialise_picamera()
-    time.sleep(3)
-    server.record(1)
-    time.sleep(1)
+    quit()
     while True:
         try:
             message_list = server.read_client_messages(read_all=True)
@@ -307,8 +330,8 @@ if __name__ == "__main__":
             for message in message_list:
                 print(message['data'].message)
 
-            server.shutdown()
-            time.sleep(1)
+            cmd = input("cmd: ")
+            server.cmd_func(cmd)
 
         except sf.CommError as e:
             print("Connection to client closed unexpectedly, shutting down...")
