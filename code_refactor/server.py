@@ -199,6 +199,9 @@ class Server(object):
         '''
         Sends a message to both clients to start a recording for record_t seconds
         '''
+        record_t = convert_string_to_float(record_t)
+        if record_t is None: return False
+
         print(f"Recording for {record_t} seconds")
         message = sf.MyMessage(c.TYPE_RECORD, (record_t,))
 
@@ -213,6 +216,7 @@ class Server(object):
             for message in message_list:
                 if not check_task_trigger(recording_complete, c.TYPE_DONE, message):
                     check_ball_cand(message, ball_candidate_dict, self.stereo_calib)
+                    print(message['data'].message)
 
             if check_task_complete(recording_complete):
                 print('Recording complete')
@@ -227,6 +231,9 @@ class Server(object):
         '''
         Sends a message to both clients to start a stream for stream_t seconds
         '''
+        stream_t = convert_string_to_float(stream_t)
+        if stream_t is None: return False
+
         print(f"Streaming for {stream_t} seconds")
         message = sf.MyMessage(c.TYPE_STREAM, (stream_t,))
 
@@ -265,16 +272,27 @@ class Server(object):
         Attempts to call the function cmd from self.cmd_parser with any additional args if they exist
         '''
         split = cmd.split(" ")
-
         func = self.cmd_parser.get(split[0], None)
+        num_args = len(signature(func).parameters)
 
-        if len(split) == 1:
-            return func()
+        if func is None:
+            print("Invalid server command, type help for list of commands")
+            return
 
-        elif len(signature(func).parameters) == len(split)-1:
-                return func(*split[1:])
+        if num_args == len(split)-1:
+            return func(*split[1:])
 
-        else: return    
+        else:
+            print(f"Invalid number of args. {func.__name__} takes {num_args} argument{'s'*(num_args!=1)}")
+            return  
+
+def convert_string_to_float(my_string):
+    try:
+        return float(my_string)
+
+    except ValueError as e:
+        print(e)
+        return None
 
 def check_ball_cand(message, ball_candidate_dict, stereo_calib):
     '''
@@ -296,6 +314,9 @@ def check_task_trigger(task_status_dict, trigger_type, message):
 
         if message['client'] in task_status_dict:
             task_status_dict[message['client']] = True
+            return True
+
+    return False
 
 def check_task_complete(task_status_dict):
     all_done = False
@@ -322,7 +343,6 @@ if __name__ == "__main__":
     server = Server()
     server.initialise()
     server.initialise_picamera()
-    quit()
     while True:
         try:
             message_list = server.read_client_messages(read_all=True)

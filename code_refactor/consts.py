@@ -41,7 +41,7 @@ CHUNK_SIZE = 4096
 #################### - Message Consts - ####################
 TYPE_STR = "str"
 TYPE_VAR = "var"
-TYPE_RECORD = "rec"
+TYPE_RECORD = "record"
 TYPE_CAP = "cap"
 TYPE_IMG = "img"
 TYPE_BALLS = "balls"

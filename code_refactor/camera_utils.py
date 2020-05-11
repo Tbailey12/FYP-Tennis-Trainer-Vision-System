@@ -245,7 +245,7 @@ class FrameController(object):
             self.processing_complete_list[i].wait()
             processor.terminate()
             processor.join()
-        print('shutdown (picam)')
+        print('Shutdown (picam)')
         self.processing_complete.set()
 
         return True
@@ -308,18 +308,27 @@ class CameraManager(object):
         return True
 
     def record(self, record_t = None):
-        if record_t is not None:
+        self.event_manager.processing_complete.wait()
+        self.event_manager.processing_complete.clear()
+        self.frame_queues.empty_unprocessed()
+        self.frame_queues.empty_processed()
+
+        if record_t is not None and isinstance(record_t, float):
             if record_t > 0 and record_t < c.REC_T_MAX:
                 self.record_t.value = record_t
-        self.frame_queues.empty_unprocessed()
+
         self.event_manager.recording.set()
 
     def stream(self, stream_t = None):
-        if stream_t is not None:
-            if stream_t > 0 and stream_t < c.STREAM_MAX:
+        self.event_manager.processing_complete.wait()
+        self.event_manager.processing_complete.clear()
+        self.frame_queues.empty_unprocessed()
+        self.frame_queues.empty_processed()
+
+        if stream_t is not None and isinstance(stream_t, float):
+            if stream_t > 0 and stream_t < c.STREAM_T_MAX:
                 self.record_t.value = stream_t
 
-        self.frame_queues.empty_unprocessed()
         self.event_manager.record_stream.set()
         self.event_manager.recording.set()
 
@@ -329,7 +338,10 @@ class CameraManager(object):
         '''
         # Picam will stay in this while loop waiting for either shutdown or recording flags to be set
         while True:
-            if self.event_manager.recording.is_set():
+            if self.event_manager.shutdown.is_set():
+                break
+
+            elif self.event_manager.recording.is_set():
                 try:
                     for process in self.processing_complete_list:  # reset all processing complete events
                         process.clear()
@@ -342,8 +354,6 @@ class CameraManager(object):
                     self.event_manager.processing_complete.set()   # set processing complete event
                     self.event_manager.record_stream.clear()
 
-            elif self.event_manager.shutdown.is_set():
-                break
         camera.stop_recording()
         return True
 
@@ -360,6 +370,7 @@ class CameraManager(object):
             camera.start_recording(output, format='yuv')
             self.event_manager.picam_ready.set()
             self.manage_recording(camera)
+
         self.shutdown.set()
 
 # ## -- imports -- ##

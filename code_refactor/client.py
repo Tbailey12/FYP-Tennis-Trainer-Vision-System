@@ -117,7 +117,6 @@ class Client(object):
 
         else: return    
 
-
     def initialise_picamera(self):
         '''
         Initialise the picamera with default values
@@ -132,7 +131,9 @@ class Client(object):
             self.camera_process.start()
 
             self.camera_manager.event_manager.picam_ready.wait()
+            self.camera_manager.event_manager.processing_complete.set()
             self.send_to_server(c.TYPE_START_CAM, True)
+            print("Camera initialised")
             return True
         
         else:
@@ -145,6 +146,7 @@ class Client(object):
         Records for record_t using the existing camera object and sends all ball candidate data to the server
         Sends TYPE_DONE when no more messages to send
         '''
+        print(f"Recording for {record_t} seconds")
         self.camera_manager.record(record_t)
         while True:
             try:
@@ -155,6 +157,7 @@ class Client(object):
                 if  self.camera_manager.event_manager.processing_complete.is_set() and \
                             not self.camera_manager.event_manager.recording.is_set():
                     self.send_to_server(c.TYPE_DONE, True)
+                    print('Recording complete')
                     break
             time.sleep(0.001)
 
@@ -163,6 +166,7 @@ class Client(object):
         Streams for stream_t using the existing camera object and sends all raw frame data to the server
         Sends TYPE_DONE when no more messages to send        
         '''
+        print(f"Streaming for {stream_t} seconds")
         self.camera_manager.stream(stream_t)
         while True:
             try:
@@ -173,6 +177,7 @@ class Client(object):
                 if self.camera_manager.event_manager.processing_complete.is_set() and \
                         self.camera_manager.frame_queues.processed_frames.qsize() == 0:
                     self.send_to_server(c.TYPE_DONE, True)
+                    print('Stream complete')
                     break
 
             time.sleep(0.001)
@@ -183,9 +188,9 @@ class Client(object):
         '''
         print('Shutting down...')
         self.camera_manager.event_manager.shutdown.set()
-        self.camera_manager.shutdown.wait()
+        self.camera_manager.shutdown.wait(1)
         self.camera_process.kill()
-
+        print("Shutdown (client)")
         sys.exit()
 
 if __name__ == "__main__":
@@ -202,7 +207,7 @@ if __name__ == "__main__":
 
             time.sleep(0.001)
 
-        except sf.CommError as e:
+        except (sf.CommError, KeyboardInterrupt) as e:
             print('Server disconnected, closing client')
             client.shutdown()
             quit()
