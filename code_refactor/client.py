@@ -205,7 +205,7 @@ if __name__ == "__main__":
             for message in message_list:
                 client.cmd_func(message['data'].type, message['data'].message)
 
-            time.sleep(0.001)
+            time.sleep(1E-6)
 
         except (sf.CommError, KeyboardInterrupt) as e:
             print('Server disconnected, closing client')

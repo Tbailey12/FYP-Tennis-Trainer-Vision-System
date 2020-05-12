@@ -320,10 +320,12 @@ class CameraManager(object):
         self.event_manager.recording.set()
 
     def stream(self, stream_t = None):
-        self.event_manager.processing_complete.wait()
+        # self.event_manager.processing_complete.wait()
         self.event_manager.processing_complete.clear()
-        self.frame_queues.empty_unprocessed()
-        self.frame_queues.empty_processed()
+        print('unproc:', self.frame_queues.unprocessed_frames.qsize())
+        print('proc:', self.frame_queues.processed_frames.qsize())
+        # self.frame_queues.empty_unprocessed()
+        # self.frame_queues.empty_processed()
 
         if stream_t is not None and isinstance(stream_t, float):
             if stream_t > 0 and stream_t < c.STREAM_T_MAX:

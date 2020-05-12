@@ -49,15 +49,9 @@ TYPE_DONE = "done"
 TYPE_START_CAM = "start_cam"
 TYPE_SHUTDOWN = "shutdown"
 TYPE_STREAM = "stream"
+TYPE_HELP = "help"
 
 #################### - Camera Consts - ####################
-REC_T = 1					# default recording time
-REC_T_MAX = 5				# maximum recording time
-CALIB_T = 10  				# number of calibration images to take
-CALIB_IMG_DELAY = 2 		# seconds between each image
-STREAM_T_MAX = 60 			# maximum time for a stream
-STREAM_IMG_DELTA = 15		# number of frames between each streamed image
-
 FRAMERATE = 90
 FRAME_HEIGHT = 480
 FRAME_WIDTH = 640
@@ -68,6 +62,13 @@ CAM_BASELINE = 25E-2
 CAM_HEIGHT = 42.5E-2
 CAM_ANGLE = deg_2_rad(-6)
 
+REC_T = 1					# default recording time
+REC_T_MAX = 5				# maximum recording time
+CALIB_T = 10  				# number of calibration images to take
+CALIB_IMG_DELAY = 2 		# seconds between each image
+STREAM_T_MAX = 60 			# maximum time for a stream
+STREAM_IMG_DELTA = 90		# number of frames between each streamed image
+STREAM_DELTA_T = int(100*STREAM_IMG_DELTA/FRAMERATE)
 ################## - Processing Consts - ##################
 N_PROCESSORS = 4
 LEARNING_RATE = 0.15

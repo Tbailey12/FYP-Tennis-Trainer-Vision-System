@@ -31,7 +31,8 @@ class Server(object):
         self.cmd_parser = {
             c.TYPE_RECORD: self.record,
             c.TYPE_STREAM: self.stream,
-            c.TYPE_SHUTDOWN: self.shutdown
+            c.TYPE_SHUTDOWN: self.shutdown,
+            c.TYPE_HELP: self.help_func
         }
 
     def create_server_socket(self):
@@ -210,7 +211,10 @@ class Server(object):
             self.send_to_client(client, message)
             recording_complete[client] = False
 
-        ball_candidate_dict = dict.fromkeys(self.client_names, {})
+        ball_candidate_dict = dict.fromkeys(self.client_names)
+        for key in ball_candidate_dict.keys():
+            ball_candidate_dict[key] = {}
+
         while True:
             message_list = self.read_client_messages()
             for message in message_list:
@@ -227,7 +231,7 @@ class Server(object):
 
             time.sleep(0.001)
 
-    def stream(self, stream_t):
+    def stream(self, stream_t, save=False, show=False):
         '''
         Sends a message to both clients to start a stream for stream_t seconds
         '''
@@ -242,17 +246,43 @@ class Server(object):
             self.send_to_client(client, message)
             stream_complete[client] = False
 
+        img_queue = mp.Queue()
+        img_play = mp.Event()
+
+        image_process = mp.Process(target=image_viewer, args=(img_queue, img_play, c.STREAM_DELTA_T))
+        image_process.start()
+        img_play.set()
+
+        img_dict = dict.fromkeys(self.client_names)
+        for key in img_dict.keys():
+            img_dict[key] = {}
+
+        cur_frame = 0
+
         while True:
             message_list = self.read_client_messages()
             for message in message_list:
-                if not check_task_trigger(stream_complete, c.TYPE_DONE, message):
-                    check_save_img(message)
+                if not check_task_trigger(stream_complete, c.TYPE_DONE, message) \
+                                        and check_img(message):
+                    if save:
+                        save_img(message)
 
-            if check_task_complete(stream_complete):
+                    if show:
+                        add_to_img_dict(img_dict, message)
+                        img = None
+                        img = combine_img(img_dict, cur_frame)
+
+                        if img is not None: 
+                            show_img(img, img_queue)
+                            cur_frame += c.STREAM_IMG_DELTA
+
+            if check_task_complete(stream_complete) and img_queue.qsize() == 0:
                 print('Stream complete')
+                cv2.destroyAllWindows()
+                image_process.terminate()
                 return True
 
-            time.sleep(0.001)
+            time.sleep(0.01)
 
     def shutdown(self):
         '''
@@ -267,24 +297,95 @@ class Server(object):
 
         sys.exit()
 
+    def print_func_info(self, func):
+        print(f"Command: {func}{str(signature(self.cmd_parser[func]))}")
+        if self.cmd_parser[func].__doc__ is not None:
+            print(f"    {self.cmd_parser[func].__doc__}\n")
+
+    def help_func(self, func=None):
+        '''
+        Prints a list of all server commands
+        '''
+        if func is None:
+            for cmd in self.cmd_parser.keys():
+                self.print_func_info(cmd)
+
+        elif func in self.cmd_parser.keys():
+            self.print_func_info(func)
+
+        else:
+            print(f"'{func}' is not a valid server command, type help for list of commands")
+
     def cmd_func(self, cmd):
         '''
         Attempts to call the function cmd from self.cmd_parser with any additional args if they exist
         '''
-        split = cmd.split(" ")
+        split = cmd.strip().split(" ")
         func = self.cmd_parser.get(split[0], None)
-        num_args = len(signature(func).parameters)
 
         if func is None:
             print("Invalid server command, type help for list of commands")
             return
 
-        if num_args == len(split)-1:
-            return func(*split[1:])
+        params = signature(func).parameters
+        num_args = len(params)
+        num_non_default_args = count_non_default_args(params)
+
+        if len(split[1:]) < num_non_default_args:
+            print(f"Too few args. {func.__name__} takes {num_non_default_args} argument{'s'*(num_non_default_args!=1)}")
+            print(f"format: {func.__name__}{str(signature(func))}")
+
+        elif len(split[1:]) > num_args:
+            print(f"Too many args. {func.__name__} takes {num_args} argument{'s'*(num_args!=1)}")
+            print(f"format: {func.__name__}{str(signature(func))}")
 
         else:
-            print(f"Invalid number of args. {func.__name__} takes {num_args} argument{'s'*(num_args!=1)}")
-            return  
+            return func(*split[1:])
+
+def count_non_default_args(args):
+    count = 0
+    for arg in args.values():
+        if arg.default is arg.empty:
+            count+=1
+
+    return count
+
+def combine_img(img_dict, cur_frame):
+    try:
+        keys = list(img_dict.keys())
+        if len(keys) > 1:            
+            img_comb = cv2.hconcat([img_dict[c.LEFT_CLIENT][cur_frame], img_dict[c.RIGHT_CLIENT][cur_frame]])
+            return img_comb
+
+        else:
+            img = img_dict[keys[0]][cur_frame]
+            return img
+    
+    except KeyError as e:
+        return None
+
+    return None
+
+
+def add_to_img_dict(img_dict, message):
+    n_frame, img = message['data'].message
+    img_dict[message['client']][n_frame] = img
+    return True
+
+def image_viewer(img_queue, play, deltaT):
+    '''
+    Displays all frames from img_queue with deltaT (ms) spacing between each frame
+    Only displays while play is set
+    '''
+    while True:
+        play.wait()
+        try:
+            img = img_queue.get_nowait()
+            cv2.imshow('img', np.uint8(img))
+            cv2.waitKey(30)
+
+        except queue.Empty:
+            time.sleep(0.03)
 
 def convert_string_to_float(my_string):
     try:
@@ -303,10 +404,20 @@ def check_ball_cand(message, ball_candidate_dict, stereo_calib):
         rectify_points(message['data'].message[1], *stereo_calib.get_params(message['client']))
         ball_candidate_dict[message['client']][message['data'].message[0]] = message['data'].message[1]
 
-def check_save_img(message):
+def check_img(message):
     if message['data'].type == c.TYPE_IMG:
-        n_frame, img = message['data'].message
-        cv2.imwrite(f"{message['client']}_{n_frame:04d}.png", img)
+        return True
+    else:
+        return False
+
+def show_img(img, img_queue):
+    img_queue.put(img)
+    return True
+
+def save_img(message):
+    n_frame, img = message['data'].message
+    cv2.imwrite(f"{message['client']}_{n_frame:04d}.png", img)
+    return True
 
 def check_task_trigger(task_status_dict, trigger_type, message):
     if  message['data'].type == trigger_type and \
