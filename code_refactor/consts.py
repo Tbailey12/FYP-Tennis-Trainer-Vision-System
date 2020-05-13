@@ -69,6 +69,7 @@ CALIB_IMG_DELAY = 2 		# seconds between each image
 STREAM_T_MAX = 60 			# maximum time for a stream
 STREAM_IMG_DELTA = 90		# number of frames between each streamed image
 STREAM_DELTA_T = int(100*STREAM_IMG_DELTA/FRAMERATE)
+
 ################## - Processing Consts - ##################
 N_PROCESSORS = 4
 LEARNING_RATE = 0.15
@@ -87,25 +88,35 @@ DISP_Y = 30
 SIM_THRESH = 0.1
 
 #################### - Graph Consts - ####################
+SCALER = 1E-1
 X_3D = 0
 Y_3D = 1
 Z_3D = 2
-VM = 150	# max ball velocity
-dT = 1/FRAMERATE	# inter frame time
-dM = kph_2_mps(VM)*dT 	# max dist
-C_INIT = 0
-C_CAND = 1
+VM = 150*SCALER			# max ball velocity
+dT = 1/FRAMERATE		# inter frame time
+dM = kph_2_mps(VM)*dT*2 # max dist
+WIN_SIZE = 30
+WIN_OVERLAP = 5
 MAX_EST = 3
-EXTRAPOLATE_N = 3
-TRACKLET_SCORE_THRESH = 1
-TOKEN_SIM_THRESH = dM/2
-TOKEN_SCORE_THRESH = 1
-SCORE_TOK_THRESH = 1
+CAND_INIT = 0
+CAND_DATA = 1
+EXTRAPOLATE_N = 5
+MAX_SHARED_TOKS = 5
+MIN_SHARED_TOKS = 3
+EPSILON = 1E-6
 thetaM = PI
 phiM = PI
+TRACKLET_SCORE_THRESH = 1
+TOKEN_SIM_THRESH = dM
+TOKEN_SCORE_THRESH = 1
+SCORE_TOK_THRESH = 1
 
-dT = 1/FRAMERATE	# inter frame time
-dM = kph_2_mps(VM)*dT 	# max dist
+ZMIN = 0
+ZMAX = 2*SCALER
+YMIN = 4*SCALER
+YMAX = 24*SCALER
+XMIN = -11*SCALER
+XMAX = 11*SCALER
 
 #################### - LED Consts - ####################
 LED_F_MAX = 60				# max LED frequency
@@ -118,7 +129,6 @@ G_LED_PIN = 23				# green LED pin
 #################### - Calibration Consts - ####################
 SENSOR_SIZE = (3.68, 2.76)	# size of the image sensor on the camera
 SQUARE_SIZE = 23.4E-3		# size of squares on the chessboard
-# SQUARE_SIZE = 1/3			# size of squares on the chessboard
 PATTERN_SIZE = (9, 6)  		# number of points (where the black and white intersects)
 MIN_PATTERNS = 15
 
