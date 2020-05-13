@@ -57,7 +57,7 @@ FRAME_HEIGHT = 480
 FRAME_WIDTH = 640
 RESOLUTION = (FRAME_WIDTH, FRAME_HEIGHT)
 FRAME_SIZE = (FRAME_HEIGHT, FRAME_WIDTH)
-ISO = 400
+ISO = 800
 CAM_BASELINE = 25E-2
 CAM_HEIGHT = 42.5E-2
 CAM_ANGLE = deg_2_rad(-6)
@@ -72,7 +72,7 @@ STREAM_DELTA_T = int(100*STREAM_IMG_DELTA/FRAMERATE)
 
 ################## - Processing Consts - ##################
 N_PROCESSORS = 4
-LEARNING_RATE = 0.15
+LEARNING_RATE = 0.05
 BACKGROUND_RATE = 30	# number of frames between each background mean/std dev update
 FOREGROUND_SENS = 3		# how sensitive the image differencing is to changes (higher is more sensitive)
 N_OBJECTS = 50
@@ -137,20 +137,20 @@ STEREO_CALIB_F = 'stereo_calib.npy'
 LEFT_CALIB_F = 'calib_L.npy'
 RIGHT_CALIB_F = 'calib_R.npy'
 
-ACTIVE_CALIB_F = '2020-04-03_calib'
-ACTIVE_STEREO_F = '0.4008stereo_calib.npy'	# filename of stereo calib
+ACTIVE_CALIB_DIR = '2020-04-03_calib'
+ACTIVE_STEREO_F = '0.2834stereo_calib.npy'	# filename of stereo calib
 
 #################### - Directory Consts - ####################
 IMG_DIR = 'img'
 DATA_DIR = 'data'
 CALIB_DIR = 'calib'
+RECORD_DIR = 'record'
 STEREO_CALIB_DIR = 'stereo_calib'
 CALIB_IMG_L_DIR = 'calib_L'
 CALIB_IMG_R_DIR = 'calib_R'
 CALIB_IMG_S_DIR = 'calib_S'
 
 # import os
-# ROOT_P = os.getcwd()
 # IMG_P = ROOT_P + '//' + IMG_F
 # DATA_P = ROOT_P + '//' + DATA_F
 # CALIB_P = DATA_P + '//' + CALIB_F

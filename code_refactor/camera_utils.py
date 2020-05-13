@@ -4,8 +4,12 @@ import queue
 import cv2
 import picamera
 import time
+import os
 
 import consts as c
+import funcs as func
+
+path_p = os.getcwd()
 
 class BackgroundImage(object):
     def __init__(self):
@@ -62,7 +66,7 @@ class ForegroundImage(object):
         self.last_foreground = np.copy(self.foreground)
         # B = np.logical_or((y_data > (img_mean + 2*img_std)),
                           # (y_data < (img_mean - 2*img_std)))  # foreground new
-        np.multiply(background_image.img_std,c.FOREGROUND_SENS,out=self.B_1_std)
+        np.multiply(background_image.img_std, c.FOREGROUND_SENS, out=self.B_1_std)
         np.add(     background_image.img_mean, self.B_1_std, out=self.B_1_mean)
         np.subtract(background_image.img_mean, self.B_1_std, out=self.B_2_mean)
 
@@ -120,9 +124,6 @@ def image_processor(frame_queues, event_manager, process_complete):
 
             if event_manager.recording.is_set() or not process_complete.is_set():
 
-                if process_complete.is_set():
-                    process_complete.clear()
-
                 # streaming
                 if event_manager.record_stream.is_set():
                     if n_frame_record%c.STREAM_IMG_DELTA == 0 and n_frame_record >= 0:
@@ -138,61 +139,33 @@ def image_processor(frame_queues, event_manager, process_complete):
                         ball_candidates = foreground_image.sort_ball_candidates(ball_candidates)
                         frame_queues.processed_frames.put((n_frame_record, ball_candidates))
 
+                        ## -- TESTING >> ##
+                        os.chdir(func.make_path(path_p, c.IMG_DIR, c.RECORD_DIR))
+                        print(f"saved {n_frame_record:04d}.png")
+                        cv2.imwrite(f"{n_frame_record:04d}.png", y_data)
+                        ## << TESTING -- ##
+
             # calculate mean and standard deviation while idle
             else:
                 if n_frame_idle > (last_mean_frame + c.BACKGROUND_RATE):
                     background_image.calculate_mean(y_data)
                     background_image.calculate_std_dev(y_data)
                     last_mean_frame = n_frame_idle            
-
-            
-                # # sort ball candidates by size and keep the top 100
-                # ball_candidates = ball_candidates[ball_candidates[:,c.SIZE].argsort()[::-1][:c.N_OBJECTS]]
-
-                # processed_frames.put((n_frame, ball_candidates))
-
-                # ########## FOR TESTING ##############
-                # C_temp = cv2.cvtColor(C, cv2.COLOR_GRAY2RGB)
-                # img_temp = cv2.cvtColor(y_data, cv2.COLOR_GRAY2RGB)
-                # ball_candidates = ball_candidates.astype(int)
-                # for ball in ball_candidates:
-                #     cv2.drawMarker(C_temp,(ball[c.X_COORD],ball[c.Y_COORD]),(0, 0, 255),cv2.MARKER_CROSS,thickness=2,markerSize=10)
-                #     cv2.drawMarker(img_temp,(ball[c.X_COORD],ball[c.Y_COORD]),(0, 0, 255),cv2.MARKER_CROSS,thickness=2,markerSize=10)
-                
-                # save_arr = True
-                # img_array.append((n_frame, y_data))
-                # C_array.append(C_temp)
-
-                # total_time += (time.time_ns()-start)
-                # total_frames += 1
-                ########## FOR TESTING ##############
-
-            # elif event_manager.record_stream.is_set() and n_frame > -1:
-            #     if n_frame%n_calib.value == 0:
-            #         processed_frames.put((n_frame, y_data))
             
         except queue.Empty:
                 if not event_manager.recording.is_set() and frame_queues.unprocessed_frames.qsize() == 0:  # if the recording has finished
+                    ## -- TESTING >> ##
+                    # os.chdir(func.make_path(path_p, c.IMG_DIR, c.RECORD_DIR))
+                    # for img in img_array:
+                    #     img_n, img_data = img
+                    #     print(img_data)
+                    #     break
+                    #     print(f"saved {img_n:04d}.png")
+                    #     cv2.imwrite(f"{img_n:04d}.png", cv2.cvtColor(img_data, cv2.COLOR_GRAY2RGB))
+                    # img_array = []
+                    ## << TESTING -- ##
+
                     process_complete.set()
-                    # ######### FOR TESTING ##############
-                    # if total_frames>0:
-                    #     print((total_time/total_frames)/1E6)
-                    #     total_frames = 0
-                    #     total_time = 0
-                    # if img_array is not None and save_arr:
-                    #     for i,img in enumerate(img_array):
-                    #         frame, data = img
-                    #         os.chdir(c.IMG_P)
-                    #         cv2.imwrite(f"{frame:04d}.png",data)
-                    #         cv2.imwrite(f"C{frame:04d}.png",C_array[i])
-                    #     os.chdir(c.DATA_P)
-                    #     np.save('img_mean',mean_data)
-                    #     np.save('img_std', std_data)
-                    #     os.chdir(c.ROOT_P)
-                    #     img_array = []
-                    #     C_array = []
-                    #     save_arr = False
-                    # ######### FOR TESTING ##############
         
 class EventManager(object):
     '''
@@ -299,6 +272,7 @@ class CameraManager(object):
         # self.add_annotations(camera)
 
         time.sleep(2)   # give the camera a couple of seconds to initialise
+        # camera.image_effect = 'pastel'
         camera.shutter_speed = camera.exposure_speed
         camera.exposure_mode = 'off'
         g = camera.awb_gains

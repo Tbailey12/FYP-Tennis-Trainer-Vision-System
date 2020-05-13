@@ -8,6 +8,9 @@ import matplotlib.pyplot as plt
 
 ## -- custom imports -- ##
 import consts as c
+import funcs as func
+
+root_p = os.getcwd()
 
 class StereoCal(object):
 	def __init__(self, rms = None, cameraMatrix1 = None, distCoeffs1 = None, cameraMatrix2 = None, distCoeffs2 = None, R = None, T = None, E = None, F = None, R1 = None, R2 = None, P1 = None, P2 = None, Q = None, validPixROI1 = None, validPixROI2 = None):
@@ -85,7 +88,7 @@ class CamCal(object):
 
 	def load_params(self, filename):
 		try:
-			os.chdir(c.ACTIVE_CALIB_P)
+			os.chdir(func.make_path(root_p, c.DATA_DIR, c.CALIB_DIR, c.ACTIVE_CALIB_DIR))
 			with open(filename, 'rb') as f:
 				myfile = np.load(f)
 				print(f"{filename} loaded successfully")
@@ -95,14 +98,14 @@ class CamCal(object):
 				self.dist_coefs = myfile['dist_coefs']
 				self.rvecs = myfile['rvecs']
 				self.tvecs = myfile['tvecs']
-				os.chdir(c.ROOT_P)
+
 				return True
 
 		except OSError:
 			raise ValueError(f"{filename} does not exist")
 
 def load_calibs():
-	os.chdir(c.ACTIVE_CALIB_P)
+	os.chdir(func.make_path(root_p, c.DATA_DIR, c.CALIB_DIR, c.ACTIVE_CALIB_DIR))
 	names = os.listdir()
 
 	left_cal = CamCal()
@@ -113,7 +116,6 @@ def load_calibs():
 			left_cal.load_params(name)
 		elif c.RIGHT_CALIB_F in name:
 			right_cal.load_params(name)
-	os.chdir(c.ROOT_P)
 
 	return left_cal, right_cal
 
@@ -135,9 +137,8 @@ def load_stereo_calib():
 	return s_cal
 
 def save_stereo_calib(stereo_calib):
-	os.chdir(c.DATA_P)
+	os.chdir(func.make_path(root_p, c.DATA_DIR, c.STEREO_CALIB_DIR))
 	stereo_calib.save_params(f"{stereo_calib.rms:0.4f}{c.STEREO_CALIB_F}")
-	os.chdir(c.ROOT_P)
 
 def process_image(img_data, pattern_points):
 	n_frame, img = img_data
@@ -254,7 +255,7 @@ def calibrate_mono_local(camera_name, img_directory):
 	print(camera_matrix)
 
 def calibrate_stereo_local():
-	os.chdir(c.STEREO_CALIB_IMG_P)
+	os.chdir(func.make_path(root_p, c.IMG_DIR, c.CALIB_IMG_S_DIR))
 	img_list = os.listdir()
 
 	left_img_data = []
@@ -265,14 +266,14 @@ def calibrate_stereo_local():
 	## -- Load all images in for testing -- ##
 
 	for img_name in img_list:
-		if 'l' in img_name:
+		if 'l' in img_name or 'left' in img_name:
 			img = cv2.imread(img_name, cv2.IMREAD_GRAYSCALE)
-			frame_n = img_name[2:-4]
+			frame_n = img_name[-8:-4]
 			left_img_data.append((frame_n, img))
 
-		elif 'r' in img_name:
+		elif 'r' in img_name or 'right' in img_name:
 			img = cv2.imread(img_name, cv2.IMREAD_GRAYSCALE)
-			frame_n = img_name[2:-4]
+			frame_n = img_name[-8:-4]
 			right_img_data.append((frame_n, img))
 
 	## -- Find chessboards in images -- ##

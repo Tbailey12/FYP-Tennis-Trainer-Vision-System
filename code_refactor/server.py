@@ -19,7 +19,7 @@ import stereo_calibration as s_cal
 import triangulation as tr
 import trajectory_analysis as ta
 
-right_client_bypass = False
+right_client_bypass = True
 
 class Server(object):
     def __init__(self):
