@@ -5,6 +5,8 @@ import cv2
 import picamera
 import time
 import os
+import io
+from PIL import Image
 
 import consts as c
 import funcs as func
@@ -119,8 +121,13 @@ def image_processor(frame_queues, event_manager, process_complete):
                 return
 
             n_frame_record, n_frame_idle, frame_buf = frame_queues.unprocessed_frames.get_nowait()
-            # y_data is a numpy array h x w with 8 bit greyscale brightness values
-            y_data = np.frombuffer(frame_buf, dtype=np.uint8, count=c.FRAME_HEIGHT*c.FRAME_WIDTH).reshape(c.FRAME_SIZE).astype(np.float32)
+            stream = io.BytesIO(frame_buf)
+            stream.seek(0)
+            img = Image.open(stream).convert('RGB')
+            img = np.array(img)
+            img = img[:, :, ::-1].copy()
+
+            print(n_frame_record, n_frame_idle)
 
             if event_manager.recording.is_set() or not process_complete.is_set():
 
@@ -132,40 +139,43 @@ def image_processor(frame_queues, event_manager, process_complete):
                 # recording
                 else:
                     if n_frame_record >= 0:
-                        foreground_image.extract_foreground(y_data, background_image)
-                        foreground_image.foreground_difference()
-                        foreground_image.filter_foreground()
-                        ball_candidates = foreground_image.get_ball_candidates()
-                        ball_candidates = foreground_image.sort_ball_candidates(ball_candidates)
-                        frame_queues.processed_frames.put((n_frame_record, ball_candidates))
+                        # foreground_image.extract_foreground(y_data, background_image)
+                        # foreground_image.foreground_difference()
+                        # foreground_image.filter_foreground()
+                        # ball_candidates = foreground_image.get_ball_candidates()
+                        # ball_candidates = foreground_image.sort_ball_candidates(ball_candidates)
+                        # frame_queues.processed_frames.put((n_frame_record, ball_candidates))
 
                         ## -- TESTING >> ##
                         os.chdir(func.make_path(path_p, c.IMG_DIR, c.RECORD_DIR))
                         print(f"saved {n_frame_record:04d}.png")
-                        cv2.imwrite(f"{n_frame_record:04d}.png", y_data)
+                        cv2.imwrite(f"{n_frame_record:04d}.png", img)
                         ## << TESTING -- ##
-
+            # elif not event_manager.recording.is_set() and n_frame_record == -1:
+            #     process_complete.set()
             # calculate mean and standard deviation while idle
-            else:
-                if n_frame_idle > (last_mean_frame + c.BACKGROUND_RATE):
-                    background_image.calculate_mean(y_data)
-                    background_image.calculate_std_dev(y_data)
-                    last_mean_frame = n_frame_idle            
+            # else:
+                # if n_frame_idle > (last_mean_frame + c.BACKGROUND_RATE):
+                #     background_image.calculate_mean(y_data)
+                #     background_image.calculate_std_dev(y_data)
+                #     last_mean_frame = n_frame_idle            
             
         except queue.Empty:
-                if not event_manager.recording.is_set() and frame_queues.unprocessed_frames.qsize() == 0:  # if the recording has finished
-                    ## -- TESTING >> ##
-                    # os.chdir(func.make_path(path_p, c.IMG_DIR, c.RECORD_DIR))
-                    # for img in img_array:
-                    #     img_n, img_data = img
-                    #     print(img_data)
-                    #     break
-                    #     print(f"saved {img_n:04d}.png")
-                    #     cv2.imwrite(f"{img_n:04d}.png", cv2.cvtColor(img_data, cv2.COLOR_GRAY2RGB))
-                    # img_array = []
-                    ## << TESTING -- ##
+            # print(frame_queues.unprocessed_frames.qsize())
 
-                    process_complete.set()
+            if not event_manager.recording.is_set() and frame_queues.unprocessed_frames.qsize() == 0:  # if the recording has finished
+                ## -- TESTING >> ##
+                # os.chdir(func.make_path(path_p, c.IMG_DIR, c.RECORD_DIR))
+                # for img in img_array:
+                #     img_n, img_data = img
+                #     print(img_data)
+                #     break
+                #     print(f"saved {img_n:04d}.png")
+                #     cv2.imwrite(f"{img_n:04d}.png", cv2.cvtColor(img_data, cv2.COLOR_GRAY2RGB))
+                # img_array = []
+                ## << TESTING -- ##
+
+                process_complete.set()
         
 class EventManager(object):
     '''
@@ -188,6 +198,8 @@ class FrameController(object):
         self.n_frame_record = 0
         self.n_frame_idle = 0
 
+        self.stream = io.BytesIO()
+
         # create processors for processing the individual video frames
         for i in range(c.N_PROCESSORS):
             proccess_complete = mp.Event()
@@ -202,7 +214,16 @@ class FrameController(object):
         n_frame_record keeps track of the frame number since recording
         n_frame_idle keep track of the frame number since camera initialisation
         '''
-        self.frame_queues.unprocessed_frames.put((self.n_frame_record, self.n_frame_idle, buf))    # add the new frame to the queue
+        if buf.startswith(b'\xff\xd8'):
+            size = self.stream.tell()
+            if size:
+                if self.n_frame_record != -1 or self.n_frame_idle%c.BACKGROUND_RATE == 0:
+                    self.stream.seek(0)
+                    self.frame_queues.unprocessed_frames.put((self.n_frame_record, self.n_frame_idle, self.stream.read(size)))
+                self.stream.seek(0)
+
+        self.stream.write(buf)
+
         if self.event_manager.recording.is_set() or self.event_manager.record_stream.is_set():
             self.n_frame_record += 1
             self.n_frame_idle += 1
@@ -269,15 +290,15 @@ class CameraManager(object):
         # camera.iso = c.ISO
         camera.vflip = True
         camera.hflip = True
-        # self.add_annotations(camera)
+        self.add_annotations(camera)
+        # camera.exposure_mode = 'sports'
+        # camera.video_denoise = True
 
         time.sleep(2)   # give the camera a couple of seconds to initialise
-        # camera.image_effect = 'pastel'
-        camera.shutter_speed = camera.exposure_speed
-        camera.exposure_mode = 'off'
-        g = camera.awb_gains
-        camera.awb_mode = 'off'
-        camera.awb_gains = g
+        # camera.shutter_speed = camera.exposure_speed
+        # g = camera.awb_gains
+        # camera.awb_mode = 'off'
+        # camera.awb_gains = g
 
         return True
 
@@ -320,7 +341,6 @@ class CameraManager(object):
                     for process in self.processing_complete_list:  # reset all processing complete events
                         process.clear()
                     camera.wait_recording(self.record_t.value) # record for an amount of time
-                
                 finally:
                     self.event_manager.recording.clear()
                     for process in self.processing_complete_list:  # wait for all processing to be complete
@@ -341,7 +361,7 @@ class CameraManager(object):
         with picamera.PiCamera() as camera:
             self.set_params(camera)
             output = FrameController(self.frame_queues, self.event_manager, self.processing_complete_list)
-            camera.start_recording(output, format='yuv')
+            camera.start_recording(output, format='mjpeg')
             self.event_manager.picam_ready.set()
             self.manage_recording(camera)
 
