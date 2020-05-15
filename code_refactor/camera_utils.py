@@ -6,6 +6,7 @@ import picamera
 import time
 import os
 import io
+import sys
 from PIL import Image
 
 import consts as c
@@ -17,7 +18,7 @@ class BackgroundImage(object):
     def __init__(self):
         # preallocate memory for all arrays used in processing
         self.img_mean = np.zeros(c.FRAME_SIZE,dtype=np.float32)
-        self.img_std = np.ones(c.FRAME_SIZE,dtype=np.float32)
+        self.img_std = np.zeros(c.FRAME_SIZE,dtype=np.float32)
 
         self.mean_1 = np.zeros(c.FRAME_SIZE,dtype=np.float32)
         self.mean_2 = np.zeros(c.FRAME_SIZE,dtype=np.float32)
@@ -113,6 +114,12 @@ def image_processor(frame_queues, event_manager, process_complete):
     foreground_image = ForegroundImage()
 
     last_mean_frame = 0
+
+    ## -- TESTING >> ##
+    record_flg = False
+    # filter_kernel = (1/16)*np.ones((4,4), dtype=np.uint8)
+    ## << TESTING -- ##
+
     while True:
         time.sleep(1E-6)
         try:
@@ -121,60 +128,62 @@ def image_processor(frame_queues, event_manager, process_complete):
                 return
 
             n_frame_record, n_frame_idle, frame_buf = frame_queues.unprocessed_frames.get_nowait()
-            stream = io.BytesIO(frame_buf)
-            stream.seek(0)
-            img = Image.open(stream).convert('RGB')
-            img = np.array(img)
-            img = img[:, :, ::-1].copy()
+            y_data = np.frombuffer(frame_buf, dtype=np.uint8, count=c.FRAME_HEIGHT*c.FRAME_WIDTH).reshape(c.FRAME_SIZE).astype(np.float32)
 
-            print(n_frame_record, n_frame_idle)
+            # print(n_frame_record, n_frame_idle)
+            # print(frame_queues.unprocessed_frames.qsize())
 
             if event_manager.recording.is_set() or not process_complete.is_set():
 
                 # streaming
                 if event_manager.record_stream.is_set():
                     if n_frame_record%c.STREAM_IMG_DELTA == 0 and n_frame_record >= 0:
-                        frame_queues.processed_frames.put((n_frame_record, y_data))
+                        img = np.uint8(cv2.resize(y_data, (320,240)))
+                        frame_queues.processed_frames.put((n_frame_record, img))
 
                 # recording
                 else:
                     if n_frame_record >= 0:
-                        # foreground_image.extract_foreground(y_data, background_image)
-                        # foreground_image.foreground_difference()
-                        # foreground_image.filter_foreground()
-                        # ball_candidates = foreground_image.get_ball_candidates()
-                        # ball_candidates = foreground_image.sort_ball_candidates(ball_candidates)
-                        # frame_queues.processed_frames.put((n_frame_record, ball_candidates))
+                        ## -- TESTING >> ##
+                        # y_data = cv2.filter2D(y_data, ddepth = -1, kernel=filter_kernel)
+                        ## << TESTING -- ##
+
+                        foreground_image.extract_foreground(y_data, background_image)
+                        foreground_image.foreground_difference()
+                        foreground_image.filter_foreground()
+                        ball_candidates = foreground_image.get_ball_candidates()
+                        ball_candidates = foreground_image.sort_ball_candidates(ball_candidates)
+                        frame_queues.processed_frames.put((n_frame_record, ball_candidates))
 
                         ## -- TESTING >> ##
+                        record_flg = True
                         os.chdir(func.make_path(path_p, c.IMG_DIR, c.RECORD_DIR))
                         print(f"saved {n_frame_record:04d}.png")
-                        cv2.imwrite(f"{n_frame_record:04d}.png", img)
+                        # cv2.imwrite(f"{n_frame_record:04d}.png", y_data)
+                        cv2.imwrite(f"{n_frame_record:04d}.png", foreground_image.foreground_diff)
                         ## << TESTING -- ##
+
             # elif not event_manager.recording.is_set() and n_frame_record == -1:
             #     process_complete.set()
             # calculate mean and standard deviation while idle
-            # else:
-                # if n_frame_idle > (last_mean_frame + c.BACKGROUND_RATE):
-                #     background_image.calculate_mean(y_data)
-                #     background_image.calculate_std_dev(y_data)
-                #     last_mean_frame = n_frame_idle            
+            else:
+                if n_frame_idle > (last_mean_frame + c.BACKGROUND_RATE):
+                    background_image.calculate_mean(y_data)
+                    background_image.calculate_std_dev(y_data)
+                    last_mean_frame = n_frame_idle 
+                    # print(f"mean: {background_image.img_mean.mean()}")
+                    # print(f"std: {background_image.img_std.mean()}")      
             
         except queue.Empty:
             # print(frame_queues.unprocessed_frames.qsize())
 
             if not event_manager.recording.is_set() and frame_queues.unprocessed_frames.qsize() == 0:  # if the recording has finished
                 ## -- TESTING >> ##
-                # os.chdir(func.make_path(path_p, c.IMG_DIR, c.RECORD_DIR))
-                # for img in img_array:
-                #     img_n, img_data = img
-                #     print(img_data)
-                #     break
-                #     print(f"saved {img_n:04d}.png")
-                #     cv2.imwrite(f"{img_n:04d}.png", cv2.cvtColor(img_data, cv2.COLOR_GRAY2RGB))
-                # img_array = []
+                # if record_flg:
+                #     os.chdir(func.make_path(path_p))
+                #     np.save("background_image.npy", background_image)
+                #     record_flg = False
                 ## << TESTING -- ##
-
                 process_complete.set()
         
 class EventManager(object):
@@ -214,15 +223,12 @@ class FrameController(object):
         n_frame_record keeps track of the frame number since recording
         n_frame_idle keep track of the frame number since camera initialisation
         '''
-        if buf.startswith(b'\xff\xd8'):
-            size = self.stream.tell()
-            if size:
-                if self.n_frame_record != -1 or self.n_frame_idle%c.BACKGROUND_RATE == 0:
-                    self.stream.seek(0)
-                    self.frame_queues.unprocessed_frames.put((self.n_frame_record, self.n_frame_idle, self.stream.read(size)))
-                self.stream.seek(0)
+        if self.event_manager.recording.is_set():
+            self.frame_queues.unprocessed_frames.put((self.n_frame_record, self.n_frame_idle, buf))
 
-        self.stream.write(buf)
+        elif self.event_manager.processing_complete.is_set() and self.n_frame_idle%c.BACKGROUND_RATE == 0:
+            for i in range(c.N_PROCESSORS):
+                self.frame_queues.unprocessed_frames.put((self.n_frame_record, self.n_frame_idle, buf))
 
         if self.event_manager.recording.is_set() or self.event_manager.record_stream.is_set():
             self.n_frame_record += 1
@@ -287,18 +293,20 @@ class CameraManager(object):
         '''
         camera.framerate = c.FRAMERATE
         camera.resolution = c.RESOLUTION
+        camera.shutter_speed = 1000
         # camera.iso = c.ISO
         camera.vflip = True
         camera.hflip = True
-        self.add_annotations(camera)
-        # camera.exposure_mode = 'sports'
+        camera.saturation = 100
+        # self.add_annotations(camera)
         # camera.video_denoise = True
 
         time.sleep(2)   # give the camera a couple of seconds to initialise
+        camera.exposure_mode = 'off'
         # camera.shutter_speed = camera.exposure_speed
-        # g = camera.awb_gains
-        # camera.awb_mode = 'off'
-        # camera.awb_gains = g
+        g = camera.awb_gains
+        camera.awb_mode = 'off'
+        camera.awb_gains = g
 
         return True
 
@@ -315,12 +323,14 @@ class CameraManager(object):
         self.event_manager.recording.set()
 
     def stream(self, stream_t = None):
+        self.event_manager.processing_complete.wait()
+        self.event_manager.processing_complete.clear()
+
         if stream_t is not None and isinstance(stream_t, float):
             if stream_t > 0 and stream_t < c.STREAM_T_MAX:
                 self.record_t.value = stream_t
 
         # self.event_manager.processing_complete.wait()
-        self.event_manager.processing_complete.clear()
         # self.frame_queues.empty_unprocessed()
         # self.frame_queues.empty_processed()
 
@@ -361,7 +371,7 @@ class CameraManager(object):
         with picamera.PiCamera() as camera:
             self.set_params(camera)
             output = FrameController(self.frame_queues, self.event_manager, self.processing_complete_list)
-            camera.start_recording(output, format='mjpeg')
+            camera.start_recording(output, format='yuv')
             self.event_manager.picam_ready.set()
             self.manage_recording(camera)
 

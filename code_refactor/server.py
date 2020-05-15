@@ -5,6 +5,7 @@ import os
 import sys
 import queue
 import cv2
+import pickle
 import multiprocessing as mp
 import numpy as np
 from inspect import signature
@@ -19,7 +20,8 @@ import stereo_calibration as s_cal
 import triangulation as tr
 import trajectory_analysis as ta
 
-right_client_bypass = True
+right_client_bypass = False
+root_p = os.getcwd()
 
 class Server(object):
     def __init__(self):
@@ -168,7 +170,7 @@ class Server(object):
                     print('left client connected')
                     return True
 
-            time.sleep(0.01)
+            time.sleep(0.001)
         return False
 
     def initialise_picamera(self):
@@ -226,7 +228,13 @@ class Server(object):
 
             if check_task_complete(recording_complete):
                 print('Recording complete')
+                with open("ball_dict.pkl", "wb") as file:
+                    pickle.dump(ball_candidate_dict, file)
+
                 points_3d = tr.triangulate_points(ball_candidate_dict, self.stereo_calib)
+                for point in points_3d:
+                    print(point)
+                np.save("points_3d.npy", points_3d)
                 trajectory = analyse_trajectory(points_3d)
                 if trajectory is not None:
                     plot_trajcetory(trajectory, save=False)
@@ -275,7 +283,7 @@ class Server(object):
                         img = None
                         img = combine_img(img_dict, cur_frame)
 
-                        if img is not None: 
+                        if img is not None:
                             show_img(img, img_queue)
                             cur_frame += c.STREAM_IMG_DELTA
 
@@ -286,7 +294,7 @@ class Server(object):
 
                 return True
 
-            time.sleep(0.0001)
+            time.sleep(0.001)
 
     def shutdown(self):
         '''
@@ -468,7 +476,8 @@ def image_viewer(img_queue, play, deltaT):
             cv2.waitKey(30)
 
         except queue.Empty:
-            time.sleep(0.03)
+            time.sleep(0.001)
+            pass
 
 def convert_string_to_float(my_string):
     try:
@@ -498,6 +507,7 @@ def show_img(img, img_queue):
     return True
 
 def save_img(message):
+    os.chdir(func.make_path(root_p, c.IMG_DIR, c.STREAM_DIR))
     n_frame, img = message['data'].message
     cv2.imwrite(f"{message['client']}_{n_frame:04d}.png", img)
     return True

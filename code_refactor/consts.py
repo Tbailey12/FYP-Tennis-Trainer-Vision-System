@@ -52,12 +52,12 @@ TYPE_STREAM = "stream"
 TYPE_HELP = "help"
 
 #################### - Camera Consts - ####################
-FRAMERATE = 50
-FRAME_HEIGHT = 240
-FRAME_WIDTH = 320
+FRAMERATE = 90
+FRAME_HEIGHT = 480
+FRAME_WIDTH = 640
 RESOLUTION = (FRAME_WIDTH, FRAME_HEIGHT)
 FRAME_SIZE = (FRAME_HEIGHT, FRAME_WIDTH)
-ISO = 50
+ISO = 200
 CAM_BASELINE = 25E-2
 CAM_HEIGHT = 42.5E-2
 CAM_ANGLE = deg_2_rad(-6)
@@ -67,13 +67,13 @@ REC_T_MAX = 5				# maximum recording time
 CALIB_T = 10  				# number of calibration images to take
 CALIB_IMG_DELAY = 2 		# seconds between each image
 STREAM_T_MAX = 60 			# maximum time for a stream
-STREAM_IMG_DELTA = 90		# number of frames between each streamed image
+STREAM_IMG_DELTA = 15		# number of frames between each streamed image
 STREAM_DELTA_T = int(100*STREAM_IMG_DELTA/FRAMERATE)
 
 ################## - Processing Consts - ##################
 N_PROCESSORS = 4
-LEARNING_RATE = 0.05
-BACKGROUND_RATE = 30	# number of frames between each background mean/std dev update
+LEARNING_RATE = 0.1
+BACKGROUND_RATE = 5		# number of frames between each background mean/std dev update
 FOREGROUND_SENS = 3		# how sensitive the image differencing is to changes (higher is more sensitive)
 N_OBJECTS = 50
 BALL_SIZE_MIN = 2
@@ -145,6 +145,7 @@ IMG_DIR = 'img'
 DATA_DIR = 'data'
 CALIB_DIR = 'calib'
 RECORD_DIR = 'record'
+STREAM_DIR = 'stream'
 STEREO_CALIB_DIR = 'stereo_calib'
 CALIB_IMG_L_DIR = 'calib_L'
 CALIB_IMG_R_DIR = 'calib_R'
