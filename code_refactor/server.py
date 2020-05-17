@@ -207,6 +207,13 @@ class Server(object):
         record_t = convert_string_to_float(record_t)
         if record_t is None: return False
 
+        if record_t is not None and isinstance(record_t, float):
+            if record_t > 0 and record_t <= c.REC_T_MAX:
+                record_t = record_t
+            else:
+                print(f"ERROR: {record_t}s is too long for recording")
+                record_t = c.REC_T_MAX
+
         print(f"Recording for {record_t} seconds")
         message = sf.MyMessage(c.TYPE_RECORD, (record_t,))
 
@@ -237,7 +244,7 @@ class Server(object):
                 np.save("points_3d.npy", points_3d)
                 trajectory = analyse_trajectory(points_3d)
                 if trajectory is not None:
-                    plot_trajcetory(trajectory, save=False)
+                    plot_trajectory(trajectory, save=False)
                 return True
 
             time.sleep(0.001)
@@ -381,6 +388,8 @@ def analyse_trajectory(points_3d):
         print("No valid trajectories found")
         return None
 
+    # return best_tracklet
+
     best_tracklet = ta.split_tracklet(best_tracklet)
     curve_params = fit_curve(best_tracklet)
 
@@ -388,8 +397,8 @@ def analyse_trajectory(points_3d):
         print("Curve could not be fitted")
         return None
 
-    curve = est_points(curve_params, ta.curve_func)
-    curve_d1 = est_points(curve_params, ta.d1_curve_func)
+    curve = est_points(curve_params, ta.curve_func, t=(0, (best_tracklet.tokens[-1].f+1)/c.FRAMERATE, 1000))
+    curve_d1 = est_points(curve_params, ta.d1_curve_func, t=(0, (best_tracklet.tokens[-1].f+1)/c.FRAMERATE, 1000))
 
     if curve is None or curve_d1 is None:
         return None
@@ -398,7 +407,7 @@ def analyse_trajectory(points_3d):
     return trajectory
 
 def est_points(curve_params, curve_func, t=(0,2,1000)):
-    t_points = np.linspace(t[0],t[1],t[3])
+    t_points = np.linspace(t[0],t[1],t[2])
 
     try:
         x_est = curve_func(t_points, *curve_params['x'])
@@ -416,10 +425,14 @@ def fit_curve(tracklet):
     if tracklet is None:
         return None
 
+    x_points = []
+    y_points = []
+    z_points = []
+
     for i, tok in enumerate(tracklet.tokens):
-        x_points.append(tok.coords[X])
-        y_points.append(tok.coords[Y])
-        z_points.append(tok.coords[Z])
+        x_points.append(tok.coords[c.X_3D])
+        y_points.append(tok.coords[c.Y_3D])
+        z_points.append(tok.coords[c.Z_3D])
 
     t = np.linspace(tracklet.start_frame*1/90, \
                 (tracklet.start_frame+tracklet.length)*1/90, \
@@ -544,6 +557,7 @@ def rectify_points(frame, camera_matrix, dist_coeffs, R_matrix, P_matrix, *args)
 
 if __name__ == "__main__":
     print("Server started")
+    func.clean_dir(func.make_path(root_p, c.IMG_DIR, c.STREAM_DIR))
     server = Server()
     server.initialise()
     server.initialise_picamera()

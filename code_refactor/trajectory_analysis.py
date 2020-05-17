@@ -326,7 +326,10 @@ def get_tracklets(candidates_3D):
 
 		if f == 0:
 			win_start = 0
-			win_end = win_start+c.WIN_SIZE
+			if num_frames > c.WIN_SIZE:
+				win_end = win_start+c.WIN_SIZE
+			else:
+				win_end = num_frames
 
 		elif f % c.WIN_SIZE == 0 and f != 0:
 			win_start = f-c.WIN_OVERLAP
@@ -433,6 +436,8 @@ def split_tracklet(tracklet):
 						new_track.add_token(tok)
 				
 					return new_track
+
+		return tracklet
 
 if __name__ == "__main__":
 	RESOLUTION = (640,480)

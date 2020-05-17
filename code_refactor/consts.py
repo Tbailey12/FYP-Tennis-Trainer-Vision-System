@@ -59,11 +59,11 @@ RESOLUTION = (FRAME_WIDTH, FRAME_HEIGHT)
 FRAME_SIZE = (FRAME_HEIGHT, FRAME_WIDTH)
 ISO = 200
 CAM_BASELINE = 25E-2
-CAM_HEIGHT = 42.5E-2
-CAM_ANGLE = deg_2_rad(-6)
+CAM_HEIGHT = 30.5E-2
+CAM_ANGLE = deg_2_rad(-9)
 
 REC_T = 1					# default recording time
-REC_T_MAX = 5				# maximum recording time
+REC_T_MAX = 3				# maximum recording time
 CALIB_T = 10  				# number of calibration images to take
 CALIB_IMG_DELAY = 2 		# seconds between each image
 STREAM_T_MAX = 60 			# maximum time for a stream
@@ -84,7 +84,7 @@ SIZE = 2
 X_COORD = 3
 Y_COORD = 4
 LPF_THRESH = 150
-DISP_Y = 30
+DISP_Y = 50
 SIM_THRESH = 0.1
 
 #################### - Graph Consts - ####################

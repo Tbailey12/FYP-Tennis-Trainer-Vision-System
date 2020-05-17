@@ -1,16 +1,6 @@
 import numpy as np
 import copy
 
-# class Tracklet(object):
-# 	def __init__(self, start_frame, tracklet_box=None, tokens=[], score=0,length=0):
-# 		self.start_frame = start_frame
-# 		self.tracklet_box = tracklet_box
-# 		self.tokens = tokens
-# 		self.score = score
-# 		self.length = length
-# 		self.con_est = 0
-# 		self.is_valid = True
-
 def create_graph(list):
 	graph = {}
 	for i in range(len(list)):
@@ -46,6 +36,16 @@ def get_longest_paths(tracklets, longest_path, graph, start, path=[], score=0):
 	del path[-1]
 
 if __name__ == "__main__":
+	class Tracklet(object):
+		def __init__(self, start_frame, tracklet_box=None, tokens=[], score=0,length=0):
+			self.start_frame = start_frame
+			self.tracklet_box = tracklet_box
+			self.tokens = tokens
+			self.score = score
+			self.length = length
+			self.con_est = 0
+			self.is_valid = True
+
 	tracklets = []
 
 	for i in range(10):

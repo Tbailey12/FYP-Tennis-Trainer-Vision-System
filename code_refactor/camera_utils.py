@@ -12,7 +12,7 @@ from PIL import Image
 import consts as c
 import funcs as func
 
-path_p = os.getcwd()
+root_p = os.getcwd()
 
 class BackgroundImage(object):
     def __init__(self):
@@ -106,6 +106,14 @@ class ForegroundImage(object):
 
         return sorted_ball_candidates
 
+
+def mark_ball_candidates(img, ball_candidates):
+    marked_img = cv2.cvtColor(img, cv2.COLOR_GRAY2RGB)
+    ball_candidates = ball_candidates.astype(int)
+    for ball in ball_candidates:
+        cv2.drawMarker(marked_img, (ball[c.X_COORD],ball[c.Y_COORD]),(0, 0, 255),cv2.MARKER_CROSS,thickness=1,markerSize=10)
+    return marked_img
+
 def image_processor(frame_queues, event_manager, process_complete):
     processing = False
     process_complete.set()
@@ -157,10 +165,11 @@ def image_processor(frame_queues, event_manager, process_complete):
 
                         ## -- TESTING >> ##
                         record_flg = True
-                        os.chdir(func.make_path(path_p, c.IMG_DIR, c.RECORD_DIR))
+                        os.chdir(func.make_path(root_p, c.IMG_DIR, c.RECORD_DIR))
                         print(f"saved {n_frame_record:04d}.png")
                         # cv2.imwrite(f"{n_frame_record:04d}.png", y_data)
-                        cv2.imwrite(f"{n_frame_record:04d}.png", foreground_image.foreground_diff)
+                        marked_img = mark_ball_candidates(y_data, ball_candidates)
+                        cv2.imwrite(f"{n_frame_record:04d}.png", marked_img)
                         ## << TESTING -- ##
 
             # elif not event_manager.recording.is_set() and n_frame_record == -1:
@@ -317,7 +326,7 @@ class CameraManager(object):
         self.frame_queues.empty_processed()
 
         if record_t is not None and isinstance(record_t, float):
-            if record_t > 0 and record_t < c.REC_T_MAX:
+            if record_t > 0 and record_t <= c.REC_T_MAX:
                 self.record_t.value = record_t
 
         self.event_manager.recording.set()
@@ -327,7 +336,7 @@ class CameraManager(object):
         self.event_manager.processing_complete.clear()
 
         if stream_t is not None and isinstance(stream_t, float):
-            if stream_t > 0 and stream_t < c.STREAM_T_MAX:
+            if stream_t > 0 and stream_t <= c.STREAM_T_MAX:
                 self.record_t.value = stream_t
 
         # self.event_manager.processing_complete.wait()

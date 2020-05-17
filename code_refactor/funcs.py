@@ -4,6 +4,7 @@ Stores basic functions that are shared across all tennis trainer scripts
 '''
 ##########################################################
 import consts as c
+import os
 
 def print_debug(my_print):
 	'''
@@ -45,3 +46,16 @@ def make_path(root, *args):
 	    path+=("//" + arg)
 
 	return path
+
+def clean_dir(path):
+	root_p = os.getcwd()
+	try:
+		os.chdir(path)
+		for file in os.listdir():
+			os.remove(file)
+		os.chdir(root_p)
+		return True
+
+	except OSError as e:
+		print(e)
+		return False

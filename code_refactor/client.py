@@ -2,6 +2,7 @@ import socket
 import select
 import errno
 import sys
+import os
 import time
 import queue
 import traceback
@@ -9,9 +10,12 @@ from inspect import signature
 import multiprocessing as mp
 
 import consts as c
+import funcs as func
 import socket_funcs as sf
 import camera_utils
 import l_r_consts
+
+root_p = os.getcwd()
 
 class Client(object):
     def __init__(self, client_name):
@@ -194,6 +198,7 @@ class Client(object):
         sys.exit()
 
 if __name__ == "__main__":
+    func.clean_dir(func.make_path(root_p, c.IMG_DIR, c.RECORD_DIR))
     client_name = l_r_consts.CLIENT_NAME
     if len(sys.argv)>1:
         client_name = sys.argv[1]
