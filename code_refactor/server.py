@@ -379,6 +379,38 @@ def plot_trajectory(trajectory, save=False):
     ax.plot3D(trajectory['curve']['x'], trajectory['curve']['y'], trajectory['curve']['z'], c='red')
     plt.show()
 
+def find_start_end_pos(curve):
+    start, end = None, None
+    for i, point in enumerate(curve['y']):
+        if point >= 0:
+            start = i
+            break
+
+    for i, point in enumerate(curve['z']):
+        if point < 0 and i>start:
+           end = i
+           break
+
+    return start, end
+
+def trim_curve(curve, key_points):
+    start = key_points[0]
+    end = key_points[1]
+
+    if start is None or end is None:
+        return False
+
+    else:
+        for key in curve:
+            curve[key] = curve[key][start:end]
+        return True
+
+def print_bounce_stats(curve, curve_d1):
+    position = {'t': curve['t'][-1], 'x': curve['x'][-1], 'y': curve['y'][-1], 'z': curve['z'][-1]}
+    velocity = ta.calc_dist([1,1,1])
+
+    print(f"Bounce Pos: t: {position['t']:0.2f}s, x: {position['x']:0.2f}m, y: {position['y']:0.2f}m, z: {position['z']:0.2f}m")
+    print(f"Bounce velocity: {velocity:0.2f}m/s")
 
 def analyse_trajectory(points_3d):
     tracklet_box = ta.get_tracklets(points_3d)
@@ -388,8 +420,6 @@ def analyse_trajectory(points_3d):
         print("No valid trajectories found")
         return None
 
-    # return best_tracklet
-
     best_tracklet = ta.split_tracklet(best_tracklet)
     curve_params = fit_curve(best_tracklet)
 
@@ -397,16 +427,21 @@ def analyse_trajectory(points_3d):
         print("Curve could not be fitted")
         return None
 
-    curve = est_points(curve_params, ta.curve_func, t=(0, (best_tracklet.tokens[-1].f+1)/c.FRAMERATE, 1000))
-    curve_d1 = est_points(curve_params, ta.d1_curve_func, t=(0, (best_tracklet.tokens[-1].f+1)/c.FRAMERATE, 1000))
+    curve = est_points(curve_params, ta.curve_func, t=(0, c.SHOT_T_MAX, c.FIT_POINTS))
+    curve_d1 = est_points(curve_params, ta.d1_curve_func, t=(0, c.SHOT_T_MAX, c.FIT_POINTS))
 
     if curve is None or curve_d1 is None:
         return None
 
+    key_points = find_start_end_pos(curve)
+    trim_curve(curve, key_points)
+    trim_curve(curve_d1, key_points)
+    print_bounce_stats(curve, curve_d1)
+
     trajectory = {'tracklet': best_tracklet, 'curve': curve, 'curve_d1': curve_d1}
     return trajectory
 
-def est_points(curve_params, curve_func, t=(0,2,1000)):
+def est_points(curve_params, curve_func, t=(0, c.SHOT_T_MAX, c.FIT_POINTS)):
     t_points = np.linspace(t[0],t[1],t[2])
 
     try:
@@ -434,13 +469,13 @@ def fit_curve(tracklet):
         y_points.append(tok.coords[c.Y_3D])
         z_points.append(tok.coords[c.Z_3D])
 
-    t = np.linspace(tracklet.start_frame*1/90, \
-                (tracklet.start_frame+tracklet.length)*1/90, \
+    t = np.linspace(tracklet.start_frame/c.FRAMERATE, \
+                (tracklet.start_frame+tracklet.length)/c.FRAMERATE, \
                 tracklet.length)
 
-    x_params, covmatrix = curve_fit(ta.curve_func, t, x_points)
-    y_params, covmatrix = curve_fit(ta.curve_func, t, y_points)
-    z_params, covmatrix = curve_fit(ta.curve_func, t, z_points)
+    x_params, covmatrix = curve_fit(ta.curve_func, t, x_points, method='lm')
+    y_params, covmatrix = curve_fit(ta.curve_func, t, y_points, method='lm')
+    z_params, covmatrix = curve_fit(ta.curve_func, t, z_points, method='lm')
 
     curve_params = {'x':x_params, 'y':y_params, 'z':z_params}
     

@@ -58,9 +58,10 @@ FRAME_WIDTH = 640
 RESOLUTION = (FRAME_WIDTH, FRAME_HEIGHT)
 FRAME_SIZE = (FRAME_HEIGHT, FRAME_WIDTH)
 ISO = 200
+SHUTTER_SPEED = 2000		# shutter speed in microseconds
 CAM_BASELINE = 25E-2
 CAM_HEIGHT = 30.5E-2
-CAM_ANGLE = deg_2_rad(-9)
+CAM_ANGLE = deg_2_rad(-8.5)
 
 REC_T = 1					# default recording time
 REC_T_MAX = 3				# maximum recording time
@@ -112,11 +113,14 @@ TOKEN_SCORE_THRESH = 1
 SCORE_TOK_THRESH = 1
 
 ZMIN = 0
-ZMAX = 2*SCALER
+ZMAX = 3*SCALER
 YMIN = 4*SCALER
 YMAX = 24*SCALER
 XMIN = -11*SCALER
 XMAX = 11*SCALER
+
+FIT_POINTS = 1000
+SHOT_T_MAX = 3
 
 #################### - LED Consts - ####################
 LED_F_MAX = 60				# max LED frequency

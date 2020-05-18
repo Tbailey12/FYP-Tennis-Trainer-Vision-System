@@ -37,7 +37,7 @@ if __name__ == "__main__":
 	serv.plot_trajectory(trajectory)
 
 	quit()
-	# points_3d = np.load('points_3d.npy', allow_pickle=True)
+	points_3d = np.load('points_3d.npy', allow_pickle=True)
 
 
 	fig = plt.figure()

@@ -118,8 +118,8 @@ class TrackletBox(object):
 
 		start_nodes, end_nodes = gr.get_start_end_nodes(graph)
 
-		for item in graph.items():
-			print(item)
+		# for item in graph.items():
+		# 	print(item)
 
 		longest_path = {}
 		path_list = []
@@ -143,7 +143,7 @@ class TrackletBox(object):
 			merged_track = Tracklet(start_frame=self.tracklets[best_path['path'][0]].start_frame)
 
 			f=-1
-			print(best_path)
+			# print(best_path)
 			for t in best_path['path']:
 				for tok in self.tracklets[t].tokens:
 					if tok.f > f:
@@ -259,7 +259,6 @@ def evaluate(candidates_3D, tracklet, f, f_max):
 	# want to stop recursion when
 	# - 3 consecutive estimates are made
 	# - f == max
-	print(f)
 	if f < f_max:
 		est = tracklet.est_next()
 
@@ -393,7 +392,7 @@ def find_best_tracklet(tracklet_box):
 	best_score, best_tracklet = 0, None
 	for t in tracklet_box.tracklets:
 		if t.is_valid:
-			# print(f"f_start: {t.start_frame}, f_end: {t.start_frame+t.length}, score: {t.score:0.2f}, score/tok: {t.score/t.length:0.2f}")
+			print(f"f_start: {t.start_frame}, f_end: {t.start_frame+t.length}, score: {t.score:0.2f}, score/tok: {t.score/t.length:0.2f}")
 
 			if t.score>best_score:
 				best_score = t.score
@@ -401,11 +400,11 @@ def find_best_tracklet(tracklet_box):
 
 	return best_tracklet
 
-def curve_func(t,a,b,c,d):
-	return a+b*t+c*t**2+d*t**3
+def curve_func(t,a,b,c):
+	return a+b*t+c*t**2
 
-def d1_curve_func(t,a,b,c,d):
-	return b+2*c*t+3*d*t**2
+def d1_curve_func(t,a,b,c):
+	return b+2*c*t
 
 def split_tracklet(tracklet):
 		acc = []
@@ -431,7 +430,7 @@ def split_tracklet(tracklet):
 				pass
 			else:
 				if acc[k] > 0 and acc[k-1] <= 0 and acc[k+1] <=0 :
-					new_track = Tracklet(start_frame=0, tracklet_box=None, tokens=[], score=0,length=0)
+					new_track = Tracklet(start_frame=tracklet.start_frame, tracklet_box=None, tokens=[], score=0,length=0)
 					for tok in tracklet.tokens[split_start_f:k]:
 						new_track.add_token(tok)
 				
