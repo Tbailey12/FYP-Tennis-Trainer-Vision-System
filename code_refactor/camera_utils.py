@@ -164,12 +164,12 @@ def image_processor(frame_queues, event_manager, process_complete):
                         frame_queues.processed_frames.put((n_frame_record, ball_candidates))
 
                         ## -- TESTING >> ##
-                        record_flg = True
-                        os.chdir(func.make_path(root_p, c.IMG_DIR, c.RECORD_DIR))
-                        print(f"saved {n_frame_record:04d}.png")
+                        # record_flg = True
+                        # os.chdir(func.make_path(root_p, c.IMG_DIR, c.RECORD_DIR))
+                        # print(f"saved {n_frame_record:04d}.png")
                         # cv2.imwrite(f"{n_frame_record:04d}.png", y_data)
-                        marked_img = mark_ball_candidates(y_data, ball_candidates)
-                        cv2.imwrite(f"{n_frame_record:04d}.png", marked_img)
+                        # marked_img = mark_ball_candidates(y_data, ball_candidates)
+                        # cv2.imwrite(f"{n_frame_record:04d}.png", marked_img)
                         ## << TESTING -- ##
 
             # elif not event_manager.recording.is_set() and n_frame_record == -1:
@@ -185,13 +185,13 @@ def image_processor(frame_queues, event_manager, process_complete):
             
         except queue.Empty:
             # print(frame_queues.unprocessed_frames.qsize())
-
             if not event_manager.recording.is_set() and frame_queues.unprocessed_frames.qsize() == 0:  # if the recording has finished
                 ## -- TESTING >> ##
                 # if record_flg:
+                #     print(f"{n_frame_record} frames captured")
                 #     os.chdir(func.make_path(path_p))
                 #     np.save("background_image.npy", background_image)
-                #     record_flg = False
+                    # record_flg = False
                 ## << TESTING -- ##
                 process_complete.set()
         

@@ -231,7 +231,6 @@ class Server(object):
             for message in message_list:
                 if not check_task_trigger(recording_complete, c.TYPE_DONE, message):
                     check_ball_cand(message, ball_candidate_dict, self.stereo_calib)
-                    print(message['data'].message)
 
             if check_task_complete(recording_complete):
                 print('Recording complete')
@@ -239,8 +238,7 @@ class Server(object):
                     pickle.dump(ball_candidate_dict, file)
 
                 points_3d = tr.triangulate_points(ball_candidate_dict, self.stereo_calib)
-                for point in points_3d:
-                    print(point)
+
                 np.save("points_3d.npy", points_3d)
                 trajectory = analyse_trajectory(points_3d)
                 if trajectory is not None:
@@ -407,7 +405,7 @@ def trim_curve(curve, key_points):
 
 def print_bounce_stats(curve, curve_d1):
     position = {'t': curve['t'][-1], 'x': curve['x'][-1], 'y': curve['y'][-1], 'z': curve['z'][-1]}
-    velocity = ta.calc_dist([1,1,1])
+    velocity = ta.calc_dist([curve_d1['x'][-1], curve_d1['y'][-1], curve_d1['z'][-1]])
 
     print(f"Bounce Pos: t: {position['t']:0.2f}s, x: {position['x']:0.2f}m, y: {position['y']:0.2f}m, z: {position['z']:0.2f}m")
     print(f"Bounce velocity: {velocity:0.2f}m/s")

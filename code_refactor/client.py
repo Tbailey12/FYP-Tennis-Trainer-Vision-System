@@ -151,17 +151,19 @@ class Client(object):
         Sends TYPE_DONE when no more messages to send
         '''
         print(f"Recording for {record_t} seconds")
+        frame_count = 0
         self.camera_manager.record(record_t)
         while True:
             try:
                 ball_data = self.camera_manager.frame_queues.processed_frames.get_nowait()
                 self.send_to_server(c.TYPE_BALLS, ball_data)
+                frame_count+=1
 
             except queue.Empty:
                 if  self.camera_manager.event_manager.processing_complete.is_set() and \
                             not self.camera_manager.event_manager.recording.is_set():
                     self.send_to_server(c.TYPE_DONE, True)
-                    print('Recording complete')
+                    print(f'Recording complete, {frame_count} frames captured')
                     break
             time.sleep(0.001)
 
