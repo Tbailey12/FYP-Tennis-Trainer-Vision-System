@@ -146,7 +146,6 @@ class TrackletBox(object):
 
 			for t in best_path['path']:
 				for tok in self.tracklets[t].tokens:
-					# print(f"f: {tok.f}, score: {tok.score}, coords: {tok.coords}")
 					if tok.f > f:
 						merged_track.add_token(Token(f=tok.f, coords=tok.coords, score=tok.score))
 						f = tok.f
@@ -443,7 +442,7 @@ def split_tracklet(tracklet):
 				pass
 			else:
 				if acc[k] > 0 and acc[k-1] <= 0 and acc[k+1] <=0 :
-					new_track = Tracklet(start_frame=tracklet.start_frame, tracklet_box=None, tokens=[], score=0,length=0)
+					new_track = Tracklet(start_frame=tracklet.start_frame, tracklet_box=None, score=0,length=0)
 					for tok in tracklet.tokens[:k]:
 						new_track.add_token(tok)
 				
@@ -539,13 +538,10 @@ if __name__ == "__main__":
 	y_vel = yd1_est[bounce_pos]
 	z_vel = zd1_est[bounce_pos]
 
-	print(x_vel,y_vel,z_vel)
 	print(f"velocity: {np.sqrt(x_vel**2+y_vel**2+z_vel**2):2.2f} m/s")
 	print(f"bounce_loc: {x_est[bounce_pos]:0.2f}, {y_est[bounce_pos]:0.2f},{z_est[bounce_pos]:0.2f}")
 
 	z_est[bounce_pos:] = None
-
-	print(bounce_pos)
 
 	ax.plot3D(x_est,y_est,z_est,c='red')
 	plt.show()

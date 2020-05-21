@@ -411,8 +411,7 @@ def find_start_end_pos(curve):
         if point < 0 and i>start:
            end = i
            break
-
-    print(start, end)
+           
     return start, end
 
 def trim_curve(curve, key_points):
@@ -435,17 +434,13 @@ def print_bounce_stats(curve, curve_d1):
     print(f"Bounce velocity: {velocity:0.2f}m/s")
 
 def analyse_trajectory(points_3d):
-    # tracklet_box = ta.get_tracklets(points_3d)
     best_tracklet = ta.get_tracklets(points_3d)
-
-    # best_tracklet = ta.find_best_tracklet(tracklet_box)
-
 
     if best_tracklet is None:
         print("No valid trajectories found")
         return None
 
-    # best_tracklet = ta.split_tracklet(best_tracklet)
+    best_tracklet = ta.split_tracklet(best_tracklet)
     curve_params = fit_curve(best_tracklet)
 
     if curve_params is None:
