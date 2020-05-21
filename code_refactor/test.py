@@ -34,20 +34,20 @@ if __name__ == "__main__":
 	points_3d = tr.triangulate_points(ball_candidate_dict, stereo_calib)
 	trajectory = serv.analyse_trajectory(points_3d)
 
-	serv.plot_trajectory(trajectory)
+	# serv.plot_trajectory(trajectory)
 
-	quit()
+	# quit()
 	points_3d = np.load('points_3d.npy', allow_pickle=True)
 
-
-	fig = plt.figure()
+	fig = plt.figure('points_3d', figsize=(15*1.25,4*1.25))
 	ax = fig.add_subplot(111, projection='3d')
 	ax.set_xlabel('x (m)')
 	ax.set_ylabel('y (m)')
 	ax.set_zlabel('z (m)')
-	ax.set_xlim(-1.5, 1.5)
+	ax.set_xlim(-0.55, 0.55)
 	ax.set_ylim(0, 2.4)
 	ax.set_zlim(0, 0.3)
+	ax.view_init(elev=20,azim=-20)
 
 	# for tok in trajectory.tokens:
 	# 	ax.scatter(xs=tok.coords[0],ys=tok.coords[1],zs=tok.coords[2])
@@ -55,7 +55,36 @@ if __name__ == "__main__":
 	for frame in points_3d:
 		for point in frame:
 			if len(point) > 0:
-				print(point)
+				# print(point)
 				ax.scatter(xs=point[0],ys=point[1],zs=point[2])
 	# plt.savefig(f"{frame:04d}.png")
+	# plt.show()
+
+
+	fig = plt.figure('points_3d', figsize=(15*1.25,4*1.25))
+	ax = fig.add_subplot(111, projection='3d')
+	ax.set_xlabel('x (m)')
+	ax.set_ylabel('y (m)')
+	ax.set_zlabel('z (m)')
+	ax.set_xlim(-0.55, 0.55)
+	ax.set_ylim(0, 2.4)
+	ax.set_zlim(0, 0.3)
+	ax.view_init(elev=20,azim=-20)
+
+	for i, frame in enumerate(points_3d):
+		if i>30 and i < 45:
+			points_3d[i] = [np.array([0,1+0.05*(i-30+1),0.1+0.01*(i-30+1)-0.001*(i-30+1)**2])]
+		else:
+			points_3d[i]=[]
+
+	for frame in points_3d:
+		for point in frame:
+			if len(point) > 0:
+				ax.scatter(xs=point[0],ys=point[1],zs=point[2])
+
 	plt.show()
+
+	trajectory = serv.analyse_trajectory(points_3d)
+
+	if trajectory is not None:
+		serv.plot_trajectory(trajectory)

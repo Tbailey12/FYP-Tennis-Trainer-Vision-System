@@ -10,6 +10,10 @@ class TrackletBox(object):
 	def __init__(self):
 		self.tracklets = []
 
+	def __del__(self):
+		for tracklet in self.tracklets:
+			del tracklet
+
 	def add_tracklet(self, tracklet):
 		self.tracklets.append(tracklet)
 
@@ -19,7 +23,7 @@ class TrackletBox(object):
 			if score_tok < c.SCORE_TOK_THRESH:
 				tracklet.is_valid = False
 
-	def merge_tracklets(self):
+	def merge_tracklets(self):		
 		graph = gr.create_graph(self.tracklets)
 
 		## -- Same start frame -- ##
@@ -67,7 +71,7 @@ class TrackletBox(object):
 						self.tracklets[t+1].score -= self.tracklets[t+1].tokens[i].score
 						self.tracklets[t+1].tokens[i].score = 0
 
-			if cons_pos_max is None:
+			else:
 				if self.tracklets[t].length > 3 and self.tracklets[t+1].length > 3:
 					first_extrapolation_points = []
 					second_extrapolation_points = []
@@ -118,9 +122,6 @@ class TrackletBox(object):
 
 		start_nodes, end_nodes = gr.get_start_end_nodes(graph)
 
-		# for item in graph.items():
-		# 	print(item)
-
 		longest_path = {}
 		path_list = []
 		for node_s in start_nodes:
@@ -141,17 +142,35 @@ class TrackletBox(object):
 
 		if best_path is not None:
 			merged_track = Tracklet(start_frame=self.tracklets[best_path['path'][0]].start_frame)
-
 			f=-1
-			# print(best_path)
+
 			for t in best_path['path']:
 				for tok in self.tracklets[t].tokens:
+					# print(f"f: {tok.f}, score: {tok.score}, coords: {tok.coords}")
 					if tok.f > f:
 						merged_track.add_token(tok)
 						f = tok.f
 				self.tracklets[t].is_valid = False
 
+			import matplotlib.pyplot as plt
+			fig = plt.figure('points_3d', figsize=(15*1.25,4*1.25))
+			ax = fig.add_subplot(111, projection='3d')
+			ax.set_xlabel('x (m)')
+			ax.set_ylabel('y (m)')
+			ax.set_zlabel('z (m)')
+			ax.set_xlim(-0.55, 0.55)
+			ax.set_ylim(0, 2.4)
+			ax.set_zlim(0, 0.3)
+			ax.view_init(elev=20,azim=-20)
+
+			for tok in merged_track.tokens:
+				# print(f"f: {tok.f}, score: {tok.score}, coords: {tok.coords}")
+				ax.scatter(xs=tok.coords[0],ys=tok.coords[1],zs=tok.coords[2])
+
+			plt.show()
+
 			self.add_tracklet(merged_track)
+
 
 	def tok_score_sum(self, tokens):
 		score = 0
@@ -176,6 +195,10 @@ class Tracklet(object):
 		self.length = length
 		self.con_est = 0
 		self.is_valid = True
+
+	def __del__(self):
+		for token in self.tokens:
+			del token
 
 	def save_tracklet(self):
 		if self.score < c.TRACKLET_SCORE_THRESH:
@@ -224,6 +247,9 @@ class Token(object):
 		self.score = score
 		self.is_valid = True
 
+	def __del__(self):
+		del self
+
 	def calc_similarity(self, token):
 		error = self.coords-token.coords
 		return calc_dist(error)
@@ -238,9 +264,12 @@ def calc_dist(vect):
 def calc_theta_phi(diff, r):
 	r_p = np.sqrt(diff[c.X_3D]**2+diff[c.Y_3D]**2)
 
-	theta = np.arccos(diff[c.Y_3D]/r_p)
-	phi = np.arccos(r_p/r)
-	return theta, phi
+	if r_p > 0 and r>0:
+		theta = np.arccos(diff[c.Y_3D]/r_p)
+		phi = np.arccos(r_p/r)
+		return theta, phi
+	else:
+		return c.PI, c.PI
 
 def score_node(est, candidate):
 	diff = est-candidate
@@ -289,6 +318,7 @@ def evaluate(candidates_3D, tracklet, f, f_max):
 			else:
 				# added 3 estimates, stop recursion and save tracklet
 				tracklet.save_tracklet()
+
 	else:
 		# tracklet is max length
 		# save tracklet and stop recursion
@@ -360,6 +390,8 @@ def get_tracklets(candidates_3D):
 
 			if init_set:
 				tracklet = Tracklet(cur_frame-3, tracklet_box)
+				for t in tracklet.tokens:
+					print(f"tokf: {t.f}, score: {t.score}, coords: {t.coords}")
 				for c1_c in c1:
 					if c1_c[c.CAND_INIT] is True:	continue
 					tracklet.add_token(Token(cur_frame-3,c1_c[c.CAND_DATA], score=0))
@@ -424,14 +456,13 @@ def split_tracklet(tracklet):
 				else: 
 					acc.append(-1)
 
-		split_start_f = 0
 		for k, a in enumerate(acc):
 			if k<2 or k>=len(acc)-1:
 				pass
 			else:
 				if acc[k] > 0 and acc[k-1] <= 0 and acc[k+1] <=0 :
 					new_track = Tracklet(start_frame=tracklet.start_frame, tracklet_box=None, tokens=[], score=0,length=0)
-					for tok in tracklet.tokens[split_start_f:k]:
+					for tok in tracklet.tokens[:k]:
 						new_track.add_token(tok)
 				
 					return new_track

@@ -205,14 +205,15 @@ class Server(object):
         Sends a message to both clients to start a recording for record_t seconds
         '''
         record_t = convert_string_to_float(record_t)
-        if record_t is None: return False
-
+        
         if record_t is not None and isinstance(record_t, float):
             if record_t > 0 and record_t <= c.REC_T_MAX:
                 record_t = record_t
             else:
                 print(f"ERROR: {record_t}s is too long for recording")
                 record_t = c.REC_T_MAX
+        else:
+            return False
 
         print(f"Recording for {record_t} seconds")
         message = sf.MyMessage(c.TYPE_RECORD, (record_t,))
@@ -239,10 +240,13 @@ class Server(object):
 
                 points_3d = tr.triangulate_points(ball_candidate_dict, self.stereo_calib)
 
+                plot_points_3d(points_3d)
                 np.save("points_3d.npy", points_3d)
+
                 trajectory = analyse_trajectory(points_3d)
                 if trajectory is not None:
                     plot_trajectory(trajectory, save=False)
+
                 return True
 
             time.sleep(0.001)
@@ -359,9 +363,28 @@ class Server(object):
         else:
             return func(*split[1:])
 
-def plot_trajectory(trajectory, save=False):
-
+def plot_points_3d(points_3d):
+    plt.close('all')
     fig = plt.figure(figsize=(15*1.25,4*1.25))
+    ax = fig.add_subplot(111, projection='3d')
+    ax.set_xlabel('x (m)')
+    ax.set_ylabel('y (m)')
+    ax.set_zlabel('z (m)')
+    ax.set_xlim(c.XMIN/2, c.XMAX/2)
+    ax.set_ylim(0, c.YMAX)
+    ax.set_zlim(0, c.ZMAX)
+    ax.view_init(elev=20,azim=-20)
+
+    for frame in points_3d:
+        for point in frame:
+            if len(point) > 0:
+                ax.scatter(xs=point[0],ys=point[1],zs=point[2])
+
+    plt.show()
+
+
+def plot_trajectory(trajectory, save=False):
+    fig = plt.figure('trajectory', figsize=(15*1.25,4*1.25))
     ax = fig.add_subplot(111, projection='3d')
     ax.set_xlabel('x (m)')
     ax.set_ylabel('y (m)')
@@ -412,13 +435,15 @@ def print_bounce_stats(curve, curve_d1):
 
 def analyse_trajectory(points_3d):
     tracklet_box = ta.get_tracklets(points_3d)
+
     best_tracklet = ta.find_best_tracklet(tracklet_box)
+
 
     if best_tracklet is None:
         print("No valid trajectories found")
         return None
 
-    best_tracklet = ta.split_tracklet(best_tracklet)
+    # best_tracklet = ta.split_tracklet(best_tracklet)
     curve_params = fit_curve(best_tracklet)
 
     if curve_params is None:
@@ -435,6 +460,8 @@ def analyse_trajectory(points_3d):
     trim_curve(curve, key_points)
     trim_curve(curve_d1, key_points)
     print_bounce_stats(curve, curve_d1)
+
+    del tracklet_box
 
     trajectory = {'tracklet': best_tracklet, 'curve': curve, 'curve_d1': curve_d1}
     return trajectory
@@ -519,7 +546,7 @@ def image_viewer(img_queue, play, deltaT):
         try:
             img = img_queue.get_nowait()
             cv2.imshow('img', np.uint8(img))
-            cv2.waitKey(30)
+            cv2.waitKey(1)
 
         except queue.Empty:
             time.sleep(0.001)
