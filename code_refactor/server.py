@@ -403,7 +403,7 @@ def plot_trajectory(trajectory, save=False):
 def find_start_end_pos(curve):
     start, end = None, None
     for i, point in enumerate(curve['y']):
-        if point >= 0:
+        if point >= 0 and curve['z'][i] > 0:
             start = i
             break
 
@@ -412,6 +412,7 @@ def find_start_end_pos(curve):
            end = i
            break
 
+    print(start, end)
     return start, end
 
 def trim_curve(curve, key_points):
@@ -434,9 +435,10 @@ def print_bounce_stats(curve, curve_d1):
     print(f"Bounce velocity: {velocity:0.2f}m/s")
 
 def analyse_trajectory(points_3d):
-    tracklet_box = ta.get_tracklets(points_3d)
+    # tracklet_box = ta.get_tracklets(points_3d)
+    best_tracklet = ta.get_tracklets(points_3d)
 
-    best_tracklet = ta.find_best_tracklet(tracklet_box)
+    # best_tracklet = ta.find_best_tracklet(tracklet_box)
 
 
     if best_tracklet is None:
@@ -460,8 +462,6 @@ def analyse_trajectory(points_3d):
     trim_curve(curve, key_points)
     trim_curve(curve_d1, key_points)
     print_bounce_stats(curve, curve_d1)
-
-    del tracklet_box
 
     trajectory = {'tracklet': best_tracklet, 'curve': curve, 'curve_d1': curve_d1}
     return trajectory

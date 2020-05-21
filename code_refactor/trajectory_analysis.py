@@ -148,28 +148,13 @@ class TrackletBox(object):
 				for tok in self.tracklets[t].tokens:
 					# print(f"f: {tok.f}, score: {tok.score}, coords: {tok.coords}")
 					if tok.f > f:
-						merged_track.add_token(tok)
+						merged_track.add_token(Token(f=tok.f, coords=tok.coords, score=tok.score))
 						f = tok.f
 				self.tracklets[t].is_valid = False
 
-			import matplotlib.pyplot as plt
-			fig = plt.figure('points_3d', figsize=(15*1.25,4*1.25))
-			ax = fig.add_subplot(111, projection='3d')
-			ax.set_xlabel('x (m)')
-			ax.set_ylabel('y (m)')
-			ax.set_zlabel('z (m)')
-			ax.set_xlim(-0.55, 0.55)
-			ax.set_ylim(0, 2.4)
-			ax.set_zlim(0, 0.3)
-			ax.view_init(elev=20,azim=-20)
+			return merged_track
 
-			for tok in merged_track.tokens:
-				# print(f"f: {tok.f}, score: {tok.score}, coords: {tok.coords}")
-				ax.scatter(xs=tok.coords[0],ys=tok.coords[1],zs=tok.coords[2])
-
-			plt.show()
-
-			self.add_tracklet(merged_track)
+		else: return None
 
 
 	def tok_score_sum(self, tokens):
@@ -187,10 +172,10 @@ def make_est(c1,c2,c3):
 	return c4_e
 
 class Tracklet(object):
-	def __init__(self, start_frame, tracklet_box=None, tokens=[], score=0,length=0):
+	def __init__(self, start_frame, tracklet_box=None, score=0,length=0):
 		self.start_frame = start_frame
 		self.tracklet_box = tracklet_box
-		self.tokens = tokens
+		self.tokens = list()
 		self.score = score
 		self.length = length
 		self.con_est = 0
@@ -204,9 +189,7 @@ class Tracklet(object):
 		if self.score < c.TRACKLET_SCORE_THRESH:
 			return
 		if self.tracklet_box is not None:
-			self.tracklet_box.add_tracklet(Tracklet(start_frame = copy.deepcopy(self.start_frame),\
-						tokens = copy.deepcopy(self.tokens), score = copy.deepcopy(self.score), \
-						length = copy.deepcopy(self.length)))
+			self.tracklet_box.add_tracklet(copy.deepcopy(self))
 
 	def add_token(self, token):
 		self.tokens.append(token)
@@ -389,9 +372,8 @@ def get_tracklets(candidates_3D):
 					init_set = True
 
 			if init_set:
-				tracklet = Tracklet(cur_frame-3, tracklet_box)
-				for t in tracklet.tokens:
-					print(f"tokf: {t.f}, score: {t.score}, coords: {t.coords}")
+				tracklet = Tracklet(start_frame=cur_frame-3, tracklet_box=tracklet_box)
+
 				for c1_c in c1:
 					if c1_c[c.CAND_INIT] is True:	continue
 					tracklet.add_token(Token(cur_frame-3,c1_c[c.CAND_DATA], score=0))
@@ -416,9 +398,9 @@ def get_tracklets(candidates_3D):
 				init_set = False
 				c1,c2,c3 = [],[],[]
 
-	tracklet_box.merge_tracklets()
+	best_tracklet = tracklet_box.merge_tracklets()
 
-	return tracklet_box
+	return best_tracklet
 
 def find_best_tracklet(tracklet_box):
 	best_score, best_tracklet = 0, None
@@ -490,13 +472,6 @@ if __name__ == "__main__":
 	ax.set_zlim(0, 2)
 	ax.view_init(elev=20,azim=-20)
 
-	# for frame in candidates_3D:
-	# 	for cand in frame:
-	# 		ax.scatter(xs=cand[0],ys=cand[1],zs=cand[2])
-	
-	# plt.show()
-	# quit()
-
 	tracklet_box = get_tracklets(candidates_3D)
 	best_tracklet = find_best_tracklet(tracklet_box)
 
@@ -505,9 +480,6 @@ if __name__ == "__main__":
 		quit()
 
 	best_tracklet = split_tracklet(best_tracklet)
-
-	# print(best_tracklet.length)
-	# print(len(best_tracklet.tokens))
 
 	from scipy.optimize import curve_fit
 
