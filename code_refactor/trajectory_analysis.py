@@ -171,9 +171,8 @@ def make_est(c1,c2,c3):
 	return c4_e
 
 class Tracklet(object):
-	def __init__(self, start_frame, tracklet_box=None, score=0,length=0):
+	def __init__(self, start_frame, score=0,length=0):
 		self.start_frame = start_frame
-		self.tracklet_box = tracklet_box
 		self.tokens = list()
 		self.score = score
 		self.length = length
@@ -184,11 +183,11 @@ class Tracklet(object):
 		for token in self.tokens:
 			del token
 
-	def save_tracklet(self):
+	def save_tracklet(self, tracklet_box):
 		if self.score < c.TRACKLET_SCORE_THRESH:
 			return
-		if self.tracklet_box is not None:
-			self.tracklet_box.add_tracklet(copy.deepcopy(self))
+		if tracklet_box is not None:
+			tracklet_box.add_tracklet(copy.deepcopy(self))
 
 	def add_token(self, token):
 		self.tokens.append(token)
@@ -266,7 +265,7 @@ def score_node(est, candidate):
 	else:
 		return 0
 
-def evaluate(candidates_3D, tracklet, f, f_max):
+def evaluate(candidates_3D, tracklet, tracklet_box, f, f_max):
 	# want to stop recursion when
 	# - 3 consecutive estimates are made
 	# - f == max
@@ -290,16 +289,16 @@ def evaluate(candidates_3D, tracklet, f, f_max):
 					else:
 						tracklet.add_token(Token(f, c4, 0))
 
-					evaluate(candidates_3D, tracklet, f+1, f_max)
+					evaluate(candidates_3D, tracklet, tracklet_box, f+1, f_max)
 					tracklet.del_token()
 
 		if valid_cand is False:
 			if tracklet.add_est(Token(f, est)):
-				evaluate(candidates_3D, tracklet, f+1, f_max)
+				evaluate(candidates_3D, tracklet, tracklet_box, f+1, f_max)
 				tracklet.del_token()
 			else:
 				# added 3 estimates, stop recursion and save tracklet
-				tracklet.save_tracklet()
+				tracklet.save_tracklet(tracklet_box)
 
 	else:
 		# tracklet is max length
@@ -371,7 +370,7 @@ def get_tracklets(candidates_3D):
 					init_set = True
 
 			if init_set:
-				tracklet = Tracklet(start_frame=cur_frame-3, tracklet_box=tracklet_box)
+				tracklet = Tracklet(start_frame=cur_frame-3)
 
 				for c1_c in c1:
 					if c1_c[c.CAND_INIT] is True:	continue
@@ -384,11 +383,11 @@ def get_tracklets(candidates_3D):
 							tracklet.add_token(Token(cur_frame-1,c3_c[c.CAND_DATA], score=0))
 
 							c1_c[c.CAND_INIT] = True
-							c2_c[c.CAND_INIT] = True
-							c3_c[c.CAND_INIT] = True
+							c2_c[c.CAND_INIT] = False
+							c3_c[c.CAND_INIT] = False
 
 							if check_init_toks(c1_c[c.CAND_DATA],c2_c[c.CAND_DATA],c3_c[c.CAND_DATA]):
-								evaluate(candidates_3D, tracklet, cur_frame, f_max=win_end)				
+								evaluate(candidates_3D, tracklet, tracklet_box, cur_frame, f_max=win_end)				
 
 							tracklet.del_token()
 						tracklet.del_token()
@@ -397,6 +396,7 @@ def get_tracklets(candidates_3D):
 				init_set = False
 				c1,c2,c3 = [],[],[]
 
+	print('done')
 	best_tracklet = tracklet_box.merge_tracklets()
 
 	return best_tracklet
@@ -442,7 +442,7 @@ def split_tracklet(tracklet):
 				pass
 			else:
 				if acc[k] > 0 and acc[k-1] <= 0 and acc[k+1] <=0 :
-					new_track = Tracklet(start_frame=tracklet.start_frame, tracklet_box=None, score=0,length=0)
+					new_track = Tracklet(start_frame=tracklet.start_frame, score=0,length=0)
 					for tok in tracklet.tokens[:k]:
 						new_track.add_token(tok)
 				

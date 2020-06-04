@@ -33,7 +33,7 @@ RIGHT_CLIENT = 'right'
 
 SOCKET_TIMEOUT = 1
 HEADER_LENGTH = 10
-SERVER_IP = "192.168.20.10"		# server IP address
+SERVER_IP = "192.168.1.20"		# server IP address
 PORT = 1234 
 
 CHUNK_SIZE = 4096
@@ -55,20 +55,19 @@ TYPE_HELP = "help"
 FRAMERATE = 90
 FRAME_HEIGHT = 480
 FRAME_WIDTH = 640
+STREAM_SCALER = 1
 RESOLUTION = (FRAME_WIDTH, FRAME_HEIGHT)
 FRAME_SIZE = (FRAME_HEIGHT, FRAME_WIDTH)
 ISO = 200
 SHUTTER_SPEED = 2000		# shutter speed in microseconds
-CAM_BASELINE = 25E-2
-CAM_HEIGHT = 30.5E-2
-CAM_ANGLE = deg_2_rad(-8.5)
+CAM_BASELINE = 40.2E-2
+CAM_HEIGHT = 35E-2
+CAM_ANGLE = deg_2_rad(-10)
 
 REC_T = 1					# default recording time
 REC_T_MAX = 3				# maximum recording time
-CALIB_T = 10  				# number of calibration images to take
-CALIB_IMG_DELAY = 2 		# seconds between each image
 STREAM_T_MAX = 60 			# maximum time for a stream
-STREAM_IMG_DELTA = 15		# number of frames between each streamed image
+STREAM_IMG_DELTA = 90		# number of frames between each streamed image
 STREAM_DELTA_T = int(100*STREAM_IMG_DELTA/FRAMERATE)
 
 ################## - Processing Consts - ##################
@@ -142,7 +141,7 @@ LEFT_CALIB_F = 'calib_L.npy'
 RIGHT_CALIB_F = 'calib_R.npy'
 
 ACTIVE_CALIB_DIR = '2020-04-03_calib'
-ACTIVE_STEREO_F = '0.2834stereo_calib.npy'	# filename of stereo calib
+ACTIVE_STEREO_F = '0.4479stereo_calib.npy'	# filename of stereo calib
 
 #################### - Directory Consts - ####################
 IMG_DIR = 'img'
