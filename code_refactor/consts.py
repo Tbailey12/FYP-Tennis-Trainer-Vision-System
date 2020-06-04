@@ -55,7 +55,7 @@ TYPE_HELP = "help"
 FRAMERATE = 90
 FRAME_HEIGHT = 480
 FRAME_WIDTH = 640
-STREAM_SCALER = 1
+STREAM_SCALER = 0.5
 RESOLUTION = (FRAME_WIDTH, FRAME_HEIGHT)
 FRAME_SIZE = (FRAME_HEIGHT, FRAME_WIDTH)
 ISO = 200
@@ -67,7 +67,7 @@ CAM_ANGLE = deg_2_rad(-10)
 REC_T = 1					# default recording time
 REC_T_MAX = 3				# maximum recording time
 STREAM_T_MAX = 60 			# maximum time for a stream
-STREAM_IMG_DELTA = 90		# number of frames between each streamed image
+STREAM_IMG_DELTA = 15		# number of frames between each streamed image
 STREAM_DELTA_T = int(100*STREAM_IMG_DELTA/FRAMERATE)
 
 ################## - Processing Consts - ##################
@@ -86,6 +86,9 @@ Y_COORD = 4
 LPF_THRESH = 150
 DISP_Y = 50
 SIM_THRESH = 0.1
+SIM_WR_THRESH = 2
+SIM_HR_THRESH = 2
+SIM_SR_THRESH = 2
 
 #################### - Graph Consts - ####################
 SCALER = 1E-1

@@ -88,6 +88,9 @@ def calc_similarity(left_cand, right_cand):
 		if size_r<1: size_r=1/size_r
 		if height_r<1: height_r=1/height_r
 
+		if width_r>c.SIM_WR_THRESH or size_r>c.SIM_SR_THRESH or height_r>c.SIM_HR_THRESH:
+			return None
+
 		denominator = ((size_r)**2 + (width_r)**2 + (height_r)**2)
 
 		sim = 0

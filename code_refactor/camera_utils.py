@@ -146,7 +146,7 @@ def image_processor(frame_queues, event_manager, process_complete):
                 # streaming
                 if event_manager.record_stream.is_set():
                     if n_frame_record%c.STREAM_IMG_DELTA == 0 and n_frame_record >= 0:
-                        img = np.uint8(cv2.resize(y_data, c.RESOLUTION*c.STREAM_SCALER))
+                        img = np.uint8(cv2.resize(y_data, (int(c.FRAME_WIDTH*c.STREAM_SCALER), int(c.FRAME_HEIGHT*c.STREAM_SCALER))))
                         frame_queues.processed_frames.put((n_frame_record, img))
 
                 # recording

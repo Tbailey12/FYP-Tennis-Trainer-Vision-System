@@ -32,11 +32,11 @@ if __name__ == "__main__":
 		ball_candidate_dict = pickle.load(file)
 
 	points_3d = tr.triangulate_points(ball_candidate_dict, stereo_calib)
-	trajectory = serv.analyse_trajectory(points_3d)
+	# trajectory = serv.analyse_trajectory(points_3d)
 
-	serv.plot_trajectory(trajectory)
+	# serv.plot_trajectory(trajectory)
 
-	points_3d = np.load('points_3d.npy', allow_pickle=True)
+	# points_3d = np.load('points_3d.npy', allow_pickle=True)
 
 	fig = plt.figure('points_3d', figsize=(15*1.25,4*1.25))
 	ax = fig.add_subplot(111, projection='3d')

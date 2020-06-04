@@ -303,7 +303,7 @@ def evaluate(candidates_3D, tracklet, tracklet_box, f, f_max):
 	else:
 		# tracklet is max length
 		# save tracklet and stop recursion
-		tracklet.save_tracklet()
+		tracklet.save_tracklet(tracklet_box)
 
 def check_init_toks(c1,c2,c3):
 	for cand in [c1,c2,c3]:
