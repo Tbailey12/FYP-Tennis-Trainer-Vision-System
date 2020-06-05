@@ -125,6 +125,9 @@ def image_processor(frame_queues, event_manager, process_complete):
 
     ## -- TESTING >> ##
     record_flg = False
+    ball_candidate_list = 280*[[]]
+    save_frames_raw = np.zeros((280,c.FRAME_HEIGHT,c.FRAME_WIDTH), dtype=np.float32)
+    save_frames_foreground = np.zeros((280,c.FRAME_HEIGHT,c.FRAME_WIDTH), dtype=np.float32)
     # filter_kernel = (1/16)*np.ones((4,4), dtype=np.uint8)
     ## << TESTING -- ##
 
@@ -138,9 +141,6 @@ def image_processor(frame_queues, event_manager, process_complete):
             n_frame_record, n_frame_idle, frame_buf = frame_queues.unprocessed_frames.get_nowait()
             y_data = np.frombuffer(frame_buf, dtype=np.uint8, count=c.FRAME_HEIGHT*c.FRAME_WIDTH).reshape(c.FRAME_SIZE).astype(np.float32)
 
-            # print(n_frame_record, n_frame_idle)
-            # print(frame_queues.unprocessed_frames.qsize())
-
             if event_manager.recording.is_set() or not process_complete.is_set():
 
                 # streaming
@@ -152,10 +152,6 @@ def image_processor(frame_queues, event_manager, process_complete):
                 # recording
                 else:
                     if n_frame_record >= 0:
-                        ## -- TESTING >> ##
-                        # y_data = cv2.filter2D(y_data, ddepth = -1, kernel=filter_kernel)
-                        ## << TESTING -- ##
-
                         foreground_image.extract_foreground(y_data, background_image)
                         foreground_image.foreground_difference()
                         foreground_image.filter_foreground()
@@ -164,7 +160,15 @@ def image_processor(frame_queues, event_manager, process_complete):
                         frame_queues.processed_frames.put((n_frame_record, ball_candidates))
 
                         ## -- TESTING >> ##
-                        # record_flg = True
+                        record_flg = True
+                        # marked_img = mark_ball_candidates(y_data, ball_candidates)
+                        ball_candidate_list[n_frame_record] = ball_candidates
+                        save_frames_raw[n_frame_record] = y_data
+                        save_frames_foreground[n_frame_record] = foreground_image.foreground_diff
+
+                        # RGB_foreground = cv2.cvtColor(foreground_image.foreground_diff, cv2.COLOR_GRAY2RGB)
+                        # marked_foreground = mark_ball_candidates(RGB_foreground, ball_candidates)
+                        # save_frames_foreground[n_frame_record] = marked_foreground
                         # os.chdir(func.make_path(root_p, c.IMG_DIR, c.RECORD_DIR))
                         # print(f"saved {n_frame_record:04d}.png")
                         # cv2.imwrite(f"{n_frame_record:04d}.png", y_data)
@@ -187,11 +191,21 @@ def image_processor(frame_queues, event_manager, process_complete):
             # print(frame_queues.unprocessed_frames.qsize())
             if not event_manager.recording.is_set() and frame_queues.unprocessed_frames.qsize() == 0:  # if the recording has finished
                 ## -- TESTING >> ##
-                # if record_flg:
-                #     print(f"{n_frame_record} frames captured")
+                if record_flg:
+                    os.chdir(func.make_path(root_p, c.IMG_DIR, c.RECORD_DIR))
+                    for frame in range(len(save_frames_raw)):
+                        if np.mean(save_frames_raw[frame])>0:
+                            cv2.imwrite(f"{frame:04d}.png", mark_ball_candidates(save_frames_raw[frame], ball_candidate_list[frame]))
+                            print(f"saved {frame:04d}.png")
+
+                            cv2.imwrite(f"foreground_{frame:04d}.png", mark_ball_candidates(save_frames_foreground[frame], ball_candidate_list[frame]))
+                            print(f"saved foreground_{frame:04d}.png")
                 #     os.chdir(func.make_path(path_p))
                 #     np.save("background_image.npy", background_image)
-                    # record_flg = False
+                    ball_candidate_list = 280*[[]]
+                    save_frames_raw = np.zeros((280,c.FRAME_HEIGHT,c.FRAME_WIDTH), dtype=np.float32)
+                    save_frames_foreground = np.zeros((280,c.FRAME_HEIGHT,c.FRAME_WIDTH), dtype=np.float32)
+                    record_flg = False
                 ## << TESTING -- ##
                 process_complete.set()
         
