@@ -24,6 +24,40 @@ def deg_2_rad(angle_deg):
 def rad_2_deg(angle_rad):
 	return angle_rad*180/PI
 
+def find_tennis_court():
+	x_coords, y_coords = [], []
+	# draw centremark
+	x_coords.extend([0,	0, 0])
+	y_coords.extend([0, TENNIS_CENTRE_MARK, 0])
+
+	# draw outside
+	x_coords.extend([TENNIS_WIDTH/2, TENNIS_WIDTH/2, -TENNIS_WIDTH/2, -TENNIS_WIDTH/2, 0])
+	y_coords.extend([0, TENNIS_LENGTH, TENNIS_LENGTH, 0, 0])
+
+	# draw sideline (top)
+	top_sideline = TENNIS_WIDTH/2-TENNIS_SIDELINE
+	x_coords.extend([top_sideline, top_sideline, 0])
+	y_coords.extend([0, TENNIS_LENGTH, TENNIS_LENGTH])
+
+	# draw centremark
+	x_coords.extend([0, 0])
+	y_coords.extend([TENNIS_LENGTH-TENNIS_CENTRE_MARK, TENNIS_LENGTH])
+
+	# draw sideline (bottom)
+	bottom_sideline = -TENNIS_WIDTH/2+TENNIS_SIDELINE
+	x_coords.extend([bottom_sideline, bottom_sideline, top_sideline, bottom_sideline])
+	y_coords.extend([TENNIS_LENGTH, TENNIS_LENGTH-TENNIS_SERVICE, TENNIS_LENGTH-TENNIS_SERVICE, TENNIS_LENGTH-TENNIS_SERVICE])
+
+	# draw net
+	x_coords.extend([bottom_sideline, -TENNIS_WIDTH/2-TENNIS_NET_POST, TENNIS_WIDTH/2+TENNIS_NET_POST, bottom_sideline])
+	y_coords.extend([TENNIS_LENGTH/2, TENNIS_LENGTH/2, TENNIS_LENGTH/2, TENNIS_LENGTH/2])
+
+	# draw right and centre service
+	x_coords.extend([bottom_sideline, bottom_sideline, top_sideline, 0, 0])
+	y_coords.extend([0,TENNIS_SERVICE, TENNIS_SERVICE, TENNIS_SERVICE, TENNIS_LENGTH-TENNIS_SERVICE])
+
+	z_coords = [0 for x in x_coords]
+	return x_coords, y_coords, z_coords
 
 #################### - Socket Consts - ####################
 SERVER = 'server'
@@ -62,7 +96,7 @@ ISO = 200
 SHUTTER_SPEED = 2000		# shutter speed in microseconds
 CAM_BASELINE = 40.2E-2
 CAM_HEIGHT = 35E-2
-CAM_ANGLE = deg_2_rad(-10)
+CAM_ANGLE = deg_2_rad(-9.5)
 
 REC_T = 1					# default recording time
 REC_T_MAX = 3				# maximum recording time
@@ -72,7 +106,7 @@ STREAM_DELTA_T = int(100*STREAM_IMG_DELTA/FRAMERATE)
 
 ################## - Processing Consts - ##################
 N_PROCESSORS = 4
-LEARNING_RATE = 0.1
+LEARNING_RATE = 0.05
 BACKGROUND_RATE = 5		# number of frames between each background mean/std dev update
 FOREGROUND_SENS = 3		# how sensitive the image differencing is to changes (higher is more sensitive)
 N_OBJECTS = 50
@@ -124,6 +158,15 @@ XMAX = 11*SCALER
 FIT_POINTS = 1000
 SHOT_T_MAX = 3
 
+TENNIS_SIDELINE = 1.37*SCALER
+TENNIS_WIDTH = 10.97*SCALER
+TENNIS_LENGTH = 23.77*SCALER
+TENNIS_SERVICE = 5.485*SCALER
+TENNIS_CENTRE_MARK = 0.3*SCALER
+TENNIS_NET_POST = 0.91*SCALER
+
+TENNIS_X_POINTS, TENNIS_Y_POINTS, TENNIS_Z_POINTS = find_tennis_court()
+
 #################### - LED Consts - ####################
 LED_F_MAX = 60				# max LED frequency
 LED_F_MIN = 0.5				# min LED frequency
@@ -156,14 +199,3 @@ STEREO_CALIB_DIR = 'stereo_calib'
 CALIB_IMG_L_DIR = 'calib_L'
 CALIB_IMG_R_DIR = 'calib_R'
 CALIB_IMG_S_DIR = 'calib_S'
-
-# import os
-# IMG_P = ROOT_P + '//' + IMG_F
-# DATA_P = ROOT_P + '//' + DATA_F
-# CALIB_P = DATA_P + '//' + CALIB_F
-# ACTIVE_CALIB_P = CALIB_P + '//' + ACTIVE_CALIB_F
-# STEREO_CALIB_P = DATA_P + '//' + S_CALIB_F
-
-# LEFT_CALIB_IMG_P = IMG_P + '//' + CALIB_IMG_L
-# RIGHT_CALIB_IMG_P = IMG_P + '//' + CALIB_IMG_R
-# STEREO_CALIB_IMG_P = IMG_P + '//' + CALIB_IMG_S

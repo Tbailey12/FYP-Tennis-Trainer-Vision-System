@@ -364,40 +364,46 @@ class Server(object):
             return func(*split[1:])
 
 def plot_points_3d(points_3d):
-    plt.close('all')
-    fig = plt.figure(figsize=(15*1.25,4*1.25))
+    fig = plt.figure('trajectory', figsize=(15*1.5,4*1.5))
     ax = fig.add_subplot(111, projection='3d')
-    ax.set_xlabel('x (m)')
-    ax.set_ylabel('y (m)')
-    ax.set_zlabel('z (m)')
-    ax.set_xlim(c.XMIN/2, c.XMAX/2)
-    ax.set_ylim(0, c.YMAX)
-    ax.set_zlim(0, c.ZMAX)
-    ax.view_init(elev=20,azim=-20)
 
     for frame in points_3d:
         for point in frame:
             if len(point) > 0:
                 ax.scatter(xs=point[0],ys=point[1],zs=point[2])
 
-    plt.show()
+    ax.plot3D(c.TENNIS_X_POINTS,c.TENNIS_Y_POINTS,c.TENNIS_Z_POINTS, 'black')
+    ax.auto_scale_xyz([c.XMIN, c.XMAX], [0, c.YMAX], [0,c.ZMAX])
 
-
-def plot_trajectory(trajectory, save=False):
-    fig = plt.figure('trajectory', figsize=(15*1.25,4*1.25))
-    ax = fig.add_subplot(111, projection='3d')
     ax.set_xlabel('x (m)')
     ax.set_ylabel('y (m)')
     ax.set_zlabel('z (m)')
-    ax.set_xlim(c.XMIN/2, c.XMAX/2)
-    ax.set_ylim(0, c.YMAX)
-    ax.set_zlim(0, c.ZMAX)
-    ax.view_init(elev=20,azim=-20)
+    ax.set_xlim(c.XMIN, c.XMAX)
+    ax.set_ylim(0.01, c.YMAX)
+    ax.set_zlim(0.01, c.ZMAX)
+
+    ax.view_init(elev=25,azim=-15)
+    plt.show()
+
+def plot_trajectory(trajectory, save=False):
+    fig = plt.figure('trajectory', figsize=(15*1.5,4*1.5))
+    ax = fig.add_subplot(111, projection='3d')
 
     for tok in trajectory['tracklet'].tokens:
         ax.scatter(xs=tok.coords[c.X_3D],ys=tok.coords[c.Y_3D],zs=tok.coords[c.Z_3D],c='blue',alpha=0.2)
 
+    ax.plot3D(c.TENNIS_X_POINTS,c.TENNIS_Y_POINTS,c.TENNIS_Z_POINTS, 'black')
     ax.plot3D(trajectory['curve']['x'], trajectory['curve']['y'], trajectory['curve']['z'], c='red')
+    ax.auto_scale_xyz([c.XMIN, c.XMAX], [0, c.YMAX], [0,c.ZMAX])
+
+    ax.set_xlabel('x (m)')
+    ax.set_ylabel('y (m)')
+    ax.set_zlabel('z (m)')
+    ax.set_xlim(c.XMIN, c.XMAX)
+    ax.set_ylim(0.01, c.YMAX)
+    ax.set_zlim(0.01, c.ZMAX)
+
+    ax.view_init(elev=25,azim=-15)
     plt.show()
 
 def find_start_end_pos(curve):

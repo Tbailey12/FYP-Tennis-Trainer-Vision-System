@@ -32,32 +32,29 @@ if __name__ == "__main__":
 		ball_candidate_dict = pickle.load(file)
 
 	points_3d = tr.triangulate_points(ball_candidate_dict, stereo_calib)
-	# trajectory = serv.analyse_trajectory(points_3d)
 
-	# serv.plot_trajectory(trajectory)
-
-	# points_3d = np.load('points_3d.npy', allow_pickle=True)
-
-	fig = plt.figure('points_3d', figsize=(15*1.25,4*1.25))
+	fig = plt.figure('points_3d',figsize=(15*1.5,4*1.5))
 	ax = fig.add_subplot(111, projection='3d')
-	ax.set_xlabel('x (m)')
-	ax.set_ylabel('y (m)')
-	ax.set_zlabel('z (m)')
-	ax.set_xlim(-0.55, 0.55)
-	ax.set_ylim(0, 2.4)
-	ax.set_zlim(0, 0.3)
-	ax.view_init(elev=20,azim=-20)
-
-	# for tok in trajectory.tokens:
-	# 	ax.scatter(xs=tok.coords[0],ys=tok.coords[1],zs=tok.coords[2])
-
+	
 	for frame in points_3d:
 		for point in frame:
 			if len(point) > 0:
-				# print(point)
 				ax.scatter(xs=point[0],ys=point[1],zs=point[2])
-	# plt.savefig(f"{frame:04d}.png")
+
+	ax.plot3D(c.TENNIS_X_POINTS,c.TENNIS_Y_POINTS,c.TENNIS_Z_POINTS, 'black')
+	ax.set_xlabel('x (m)')
+	ax.set_ylabel('y (m)')
+	ax.set_zlabel('z (m)')
+	ax.set_xlim(c.XMIN, c.XMAX)
+	ax.set_ylim(0.01, c.YMAX)
+	ax.set_zlim(0.01, c.ZMAX)
+
+	ax.view_init(elev=25,azim=-15)
 	plt.show()
+
+	trajectory = serv.analyse_trajectory(points_3d)
+	serv.plot_trajectory(trajectory)
+
 	quit()
 
 	# fig = plt.figure('points_3d', figsize=(15*1.25,4*1.25))

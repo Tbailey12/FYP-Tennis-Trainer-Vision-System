@@ -124,11 +124,10 @@ def image_processor(frame_queues, event_manager, process_complete):
     last_mean_frame = 0
 
     ## -- TESTING >> ##
-    record_flg = False
-    ball_candidate_list = 280*[[]]
-    save_frames_raw = np.zeros((280,c.FRAME_HEIGHT,c.FRAME_WIDTH), dtype=np.float32)
-    save_frames_foreground = np.zeros((280,c.FRAME_HEIGHT,c.FRAME_WIDTH), dtype=np.float32)
-    # filter_kernel = (1/16)*np.ones((4,4), dtype=np.uint8)
+    # record_flg = False
+    # ball_candidate_list = 280*[[]]
+    # save_frames_raw = np.zeros((280,c.FRAME_HEIGHT,c.FRAME_WIDTH), dtype=np.float32)
+    # save_frames_foreground = np.zeros((280,c.FRAME_HEIGHT,c.FRAME_WIDTH), dtype=np.float32)
     ## << TESTING -- ##
 
     while True:
@@ -160,52 +159,38 @@ def image_processor(frame_queues, event_manager, process_complete):
                         frame_queues.processed_frames.put((n_frame_record, ball_candidates))
 
                         ## -- TESTING >> ##
-                        record_flg = True
+                        # record_flg = True
                         # marked_img = mark_ball_candidates(y_data, ball_candidates)
-                        ball_candidate_list[n_frame_record] = ball_candidates
-                        save_frames_raw[n_frame_record] = y_data
-                        save_frames_foreground[n_frame_record] = foreground_image.foreground_diff
+                        # ball_candidate_list[n_frame_record] = ball_candidates
+                        # save_frames_raw[n_frame_record] = y_data
+                        # save_frames_foreground[n_frame_record] = foreground_image.foreground_diff
+                        ## << TESTING ##
 
-                        # RGB_foreground = cv2.cvtColor(foreground_image.foreground_diff, cv2.COLOR_GRAY2RGB)
-                        # marked_foreground = mark_ball_candidates(RGB_foreground, ball_candidates)
-                        # save_frames_foreground[n_frame_record] = marked_foreground
-                        # os.chdir(func.make_path(root_p, c.IMG_DIR, c.RECORD_DIR))
-                        # print(f"saved {n_frame_record:04d}.png")
-                        # cv2.imwrite(f"{n_frame_record:04d}.png", y_data)
-                        # marked_img = mark_ball_candidates(y_data, ball_candidates)
-                        # cv2.imwrite(f"{n_frame_record:04d}.png", marked_img)
-                        ## << TESTING -- ##
-
-            # elif not event_manager.recording.is_set() and n_frame_record == -1:
-            #     process_complete.set()
             # calculate mean and standard deviation while idle
             else:
                 if n_frame_idle > (last_mean_frame + c.BACKGROUND_RATE):
                     background_image.calculate_mean(y_data)
                     background_image.calculate_std_dev(y_data)
                     last_mean_frame = n_frame_idle 
-                    # print(f"mean: {background_image.img_mean.mean()}")
-                    # print(f"std: {background_image.img_std.mean()}")      
             
         except queue.Empty:
             # print(frame_queues.unprocessed_frames.qsize())
             if not event_manager.recording.is_set() and frame_queues.unprocessed_frames.qsize() == 0:  # if the recording has finished
                 ## -- TESTING >> ##
-                if record_flg:
-                    os.chdir(func.make_path(root_p, c.IMG_DIR, c.RECORD_DIR))
-                    for frame in range(len(save_frames_raw)):
-                        if np.mean(save_frames_raw[frame])>0:
-                            cv2.imwrite(f"{frame:04d}.png", mark_ball_candidates(save_frames_raw[frame], ball_candidate_list[frame]))
-                            print(f"saved {frame:04d}.png")
+                # if record_flg:
+                #     os.chdir(func.make_path(root_p, c.IMG_DIR, c.RECORD_DIR))
+                #     for frame in range(len(save_frames_raw)):
+                #         if np.mean(save_frames_raw[frame])>0:
+                #             cv2.imwrite(f"{frame:04d}.png", mark_ball_candidates(save_frames_raw[frame], ball_candidate_list[frame]))
+                #             print(f"saved {frame:04d}.png")
 
-                            cv2.imwrite(f"foreground_{frame:04d}.png", mark_ball_candidates(save_frames_foreground[frame], ball_candidate_list[frame]))
-                            print(f"saved foreground_{frame:04d}.png")
-                #     os.chdir(func.make_path(path_p))
-                #     np.save("background_image.npy", background_image)
-                    ball_candidate_list = 280*[[]]
-                    save_frames_raw = np.zeros((280,c.FRAME_HEIGHT,c.FRAME_WIDTH), dtype=np.float32)
-                    save_frames_foreground = np.zeros((280,c.FRAME_HEIGHT,c.FRAME_WIDTH), dtype=np.float32)
-                    record_flg = False
+                #             cv2.imwrite(f"foreground_{frame:04d}.png", mark_ball_candidates(save_frames_foreground[frame], ball_candidate_list[frame]))
+                #             print(f"saved foreground_{frame:04d}.png")
+
+                #     ball_candidate_list = 280*[[]]
+                #     save_frames_raw = np.zeros((280,c.FRAME_HEIGHT,c.FRAME_WIDTH), dtype=np.float32)
+                #     save_frames_foreground = np.zeros((280,c.FRAME_HEIGHT,c.FRAME_WIDTH), dtype=np.float32)
+                #     record_flg = False
                 ## << TESTING -- ##
                 process_complete.set()
         
