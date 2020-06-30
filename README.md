@@ -1,5 +1,7 @@
 Final Year Engineering Project - Tennis Trainer Vision System
 
+Two Raspberry Pi 4s are required, with a PiCamera V2 connected to each. Both Pis should be connected to a LAN or WLAN. The 'client.py' script runs on each Raspberry Pi and the 'server.py' script runs on another computer connected to the network, with the server IP address stored in 'consts.py'.
+
 ## Requires
 Python 3.8 
 
