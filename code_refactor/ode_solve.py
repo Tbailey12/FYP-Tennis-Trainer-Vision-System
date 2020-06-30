@@ -81,9 +81,9 @@ def solve_numeric(v0, elev, azimuth, spin, spin_dir, x0, y0, z0, start, end, num
 
 
 if __name__ == "__main__":
-	v0=10
-	elev=30
-	azimuth=10
+	v0=23
+	elev=8
+	azimuth=-10
 	spin=0
 	spin_dir=TOPSPIN
 	x0=0

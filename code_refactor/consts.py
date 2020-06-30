@@ -96,7 +96,7 @@ ISO = 200
 SHUTTER_SPEED = 2000		# shutter speed in microseconds
 CAM_BASELINE = 40.2E-2
 CAM_HEIGHT = 35E-2
-CAM_ANGLE = deg_2_rad(-9.5)
+CAM_ANGLE = deg_2_rad(-10.5)
 
 REC_T = 1					# default recording time
 REC_T_MAX = 3				# maximum recording time
@@ -147,6 +147,10 @@ TRACKLET_SCORE_THRESH = 1
 TOKEN_SIM_THRESH = dM
 TOKEN_SCORE_THRESH = 1
 SCORE_TOK_THRESH = 1
+
+X_CORRECTION = 0E-2
+Y_CORRECTION = 0E-2
+Z_CORRECTION = 0E-2
 
 ZMIN = 0
 ZMAX = 3*SCALER

@@ -4,27 +4,33 @@ import cv2
 import consts as c
 
 def get_rotation_matrix():
-	Rx = np.array(  [[1,		0,					  0,					  0],
+	Rx = np.array(  [[1,		0,					  0,					0],
 					[0,		 np.cos(c.CAM_ANGLE),	-np.sin(c.CAM_ANGLE),   0],
 					[0,		 np.sin(c.CAM_ANGLE),	np.cos(c.CAM_ANGLE),	0],
 					[0,		 0,					  0,					  1]], dtype=np.float32)
 	return Rx
 
 def get_translation_matrix():
-	Tz = np.array([ [1, 0, 0, -(c.CAM_BASELINE/2)],
-				[0, 1, 0, 0],
-				[0, 0, 1, c.CAM_HEIGHT],
+	Tz = np.array([ [1, 0, 0, -(c.CAM_BASELINE/2)+c.X_CORRECTION],
+				[0, 1, 0, c.Y_CORRECTION],
+				[0, 0, 1, c.CAM_HEIGHT+c.Z_CORRECTION],
 				[0, 0, 0, 1]], dtype=np.float32)
 	return Tz
 
-def get_projection_matrix():
-	Rx = get_rotation_matrix()
-	Tz = get_translation_matrix()
+# def get_projection_matrix():
+# 	Rx = get_rotation_matrix()
+# 	Tz = get_translation_matrix()
 
-	return Rx.dot(Tz)
+# 	# print(Rx.dot(Tz))
+
+# 	# return Rx.dot(Tz)
+# 	return Rx
 
 def triangulate_points(ball_candidate_dict, stereo_calib):
-	Px = get_projection_matrix()
+	# Px = get_projection_matrix()
+
+	Rx = get_rotation_matrix()
+	Tx = get_translation_matrix()
 
 	num_frames = max(list(ball_candidate_dict[c.LEFT_CLIENT].keys()))+1
 	points_3d = num_frames*[[]]
@@ -41,7 +47,7 @@ def triangulate_points(ball_candidate_dict, stereo_calib):
 				if right_cand is None:
 					continue
 				else:
-					frame_points_3d.append(calc_3d_point(stereo_calib, Px, left_cand, right_cand))
+					frame_points_3d.append(calc_3d_point(stereo_calib, Rx, Tx, left_cand, right_cand))
 
 			points_3d[f] = frame_points_3d
 
@@ -50,12 +56,13 @@ def triangulate_points(ball_candidate_dict, stereo_calib):
 
 	return points_3d
 
-def calc_3d_point(stereo_calib, Px, left_cand, right_cand):
+def calc_3d_point(stereo_calib, Rx, Tx, left_cand, right_cand):
 	point_4d = cv2.triangulatePoints(stereo_calib.P1, stereo_calib.P2, \
 				left_cand[c.X_COORD:c.Y_COORD+1], right_cand[c.X_COORD:c.Y_COORD+1]).flatten()
 	point_3d = [i/point_4d[3] for i in point_4d[:3]]
 	point_3d_shift = [point_3d[0], point_3d[2], -point_3d[1], 1]
-	point_3d_shift = Px.dot(point_3d_shift)[:3]
+	point_3d_shift = Rx.dot(point_3d_shift)
+	point_3d_shift = Tx.dot(point_3d_shift)[:3]
 
 	return point_3d_shift
 
